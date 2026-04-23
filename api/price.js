@@ -103,9 +103,25 @@ module.exports = async (req, res) => {
 
   try {
     let data;
-    if (market === "emerging") data = await tpexEmerging(symbol);
-    else if (["tw", "twotc", "us"].includes(market)) data = await yahoo(symbol, market);
-    else return res.status(400).json({ error: "unknown market: " + market });
+    if (market === "emerging") {
+      data = await tpexEmerging(symbol);
+    } else if (["tw", "twotc"].includes(market)) {
+      try {
+        data = await yahoo(symbol, market);
+      } catch (yahooErr) {
+        // 興櫃 stocks are sometimes misclassified as 上市/上櫃 by OCR.
+        // If Yahoo 404s, fall back to the TPEx emerging market feed.
+        if (/404|no data/i.test(yahooErr.message)) {
+          data = await tpexEmerging(symbol);
+        } else {
+          throw yahooErr;
+        }
+      }
+    } else if (market === "us") {
+      data = await yahoo(symbol, market);
+    } else {
+      return res.status(400).json({ error: "unknown market: " + market });
+    }
     return res.status(200).json(data);
   } catch (e) {
     return res.status(502).json({ error: e.message || String(e) });
