@@ -667,8 +667,13 @@
       }
     }
     if (!timelines.length) { el.innerHTML = ""; if (plEl) plEl.innerHTML = ""; return; }
+    // Only include timestamps where every timeline has at least one data point.
+    // Without this, early timestamps where some timelines haven't started yet
+    // produce falsely low totals that anchor the y-axis far below the real range,
+    // making actual price movement look like a flat line with a spike at the end.
+    const chartStart = Math.max(...timelines.map(tl => tl.points[0].t));
     const tsSet = new Set();
-    for (const tl of timelines) for (const pt of tl.points) tsSet.add(pt.t);
+    for (const tl of timelines) for (const pt of tl.points) if (pt.t >= chartStart) tsSet.add(pt.t);
     const timestamps = [...tsSet].sort((a, b) => a - b);
     const portfolioPoints = [];
     for (const ts of timestamps) {
