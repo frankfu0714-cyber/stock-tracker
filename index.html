@@ -137,6 +137,8 @@
   .chart-range-tabs { display: flex; gap: 4px; margin-top: 8px; }
   .ctab { font-size: 11px; padding: 4px 10px; border-radius: 6px; background: var(--chip); color: var(--muted); border: none; cursor: pointer; appearance: none; -webkit-appearance: none; }
   .ctab.active { background: var(--accent); color: white; }
+  #periodPL { margin-top: 6px; min-height: 1em; }
+  #periodPL:empty { display: none; }
   @media (max-width: 420px) {
     .form-grid { grid-template-columns: 1fr; }
     .grid { grid-template-columns: 1fr 1fr; }
@@ -164,6 +166,7 @@
       <div><span data-i18n="fx">FX</span> <b id="fxRate">—</b></div>
     </div>
     <div id="portfolioChart"></div>
+    <div id="periodPL"></div>
     <div class="chart-range-tabs" id="chartRangeTabs"></div>
   </div>
 
@@ -615,29 +618,36 @@
 
   function renderPortfolioChart() {
     const el = document.getElementById("portfolioChart");
+    const plEl = document.getElementById("periodPL");
     if (!el) return;
     const range = state.chartRange || "1d";
     const fx = state.fxUsdTwd;
     const disp = state.settings.dispCcy === "split" ? "TWD" : (state.settings.dispCcy || "TWD");
-    const timelines = [];
-    for (const p of state.positions) {
-      const cd = state.charts[`${p.market}:${p.symbol}:${range}`];
-      if (!cd || cd.points.length < 2) continue;
-      const ccy = ccyOf(p.market);
-      if (ccy !== disp && !fx) continue;
-      timelines.push({ points: cd.points, qty: p.qty, ccy, open: cd.open });
-    }
-    if (!timelines.length) { el.innerHTML = ""; return; }
     const toDisp = (val, ccy) => {
       if (ccy === disp) return val;
       return disp === "USD" ? (fx ? val / fx : 0) : (fx ? val * fx : 0);
     };
+    // Split positions: dynamic (have chart data) vs static (no chart data — use current price as flat line)
+    const timelines = [];
+    let staticVal = 0;
+    for (const p of state.positions) {
+      const ccy = ccyOf(p.market);
+      if (ccy !== disp && !fx) continue;
+      const cd = state.charts[`${p.market}:${p.symbol}:${range}`];
+      if (cd && cd.points.length >= 2) {
+        timelines.push({ points: cd.points, qty: p.qty, ccy, open: cd.open });
+      } else {
+        const pr = state.prices[`${p.market}:${p.symbol}`];
+        if (pr) staticVal += toDisp(pr.price * p.qty, ccy);
+      }
+    }
+    if (!timelines.length) { el.innerHTML = ""; if (plEl) plEl.innerHTML = ""; return; }
     const tsSet = new Set();
     for (const tl of timelines) for (const pt of tl.points) tsSet.add(pt.t);
     const timestamps = [...tsSet].sort((a, b) => a - b);
     const portfolioPoints = [];
     for (const ts of timestamps) {
-      let total = 0;
+      let total = staticVal; // 興櫃 and other flat positions contribute constant offset
       for (const tl of timelines) {
         let price = null;
         for (let i = tl.points.length - 1; i >= 0; i--) {
@@ -647,14 +657,26 @@
       }
       portfolioPoints.push({ t: ts, p: total });
     }
-    let openTotal = 0;
+    // openVal = period-start reference (prev close for dynamic + static flat value)
+    let openDynamic = 0;
     for (const tl of timelines) {
-      if (tl.open != null) openTotal += toDisp(tl.open * tl.qty, tl.ccy);
+      if (tl.open != null) openDynamic += toDisp(tl.open * tl.qty, tl.ccy);
     }
-    const openVal = openTotal > 0 ? openTotal : null;
+    const openVal = openDynamic > 0 ? (openDynamic + staticVal) : null;
+    // Period P&L: (last value) − (period-start reference)
+    const lastVal = portfolioPoints[portfolioPoints.length - 1]?.p;
+    const baseline = openVal ?? portfolioPoints[0]?.p;
+    const periodChange = (lastVal != null && baseline != null) ? lastVal - baseline : null;
     el.innerHTML = `<div class="chart-wrap"><div class="chart-xhair"></div><div class="chart-tip"></div>${buildSparkline(portfolioPoints, openVal, 600, 120)}</div>`;
     const svg = el.querySelector("svg");
     if (svg) attachChartInteraction(svg, portfolioPoints, openVal);
+    if (plEl && periodChange != null) {
+      const pct = baseline > 0 ? periodChange / baseline * 100 : null;
+      const rangeKey = CHART_RANGES.find(r => r.range === range)?.key || range;
+      plEl.innerHTML = `<span class="${periodChange >= 0 ? "pos" : "neg"}" style="font-weight:700;font-size:14px">${periodChange >= 0 ? "+" : ""}${fmtCcy(periodChange, disp)}</span> <span class="muted" style="font-size:12px">${fmtPct(pct)}&thinsp;${t(rangeKey)}</span>`;
+    } else if (plEl) {
+      plEl.innerHTML = "";
+    }
   }
 
   async function refreshAll() {
