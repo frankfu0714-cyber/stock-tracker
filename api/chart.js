@@ -1,4 +1,4 @@
-// Vercel serverless: GET /api/chart?symbol=2330&market=tw
+// Vercel serverless: GET /api/chart?symbol=2330&market=tw&range=1d
 // Returns: { points:[{t,p}], open, currency }
 // t = Unix seconds, p = close price, open = chartPreviousClose (reference for green/red)
 
@@ -8,15 +8,21 @@ const cors = (res) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 };
 
+// interval is fixed per range to avoid Yahoo rejection
+const RANGE_INTERVAL = { "1d": "5m", "5d": "15m", "1mo": "1h", "1y": "1d" };
+
 module.exports = async (req, res) => {
   cors(res);
   if (req.method === "OPTIONS") return res.status(204).end();
 
   const symbol = (req.query?.symbol || "").toString().trim().toUpperCase();
   const market = (req.query?.market || "tw").toString().trim().toLowerCase();
+  const range   = RANGE_INTERVAL[req.query?.range] ? req.query.range : "1d";
+  const interval = RANGE_INTERVAL[range];
+
   if (!symbol) return res.status(400).json({ error: "missing symbol" });
 
-  // 興櫃 stocks have no Yahoo intraday data
+  // 興櫃 stocks have no Yahoo intraday/historical data
   if (market === "emerging") {
     return res.status(200).json({ points: [], open: null, currency: "TWD" });
   }
@@ -26,7 +32,7 @@ module.exports = async (req, res) => {
   : market === "twotc" ? `${symbol}.TWO`
   : symbol;
 
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySym)}?range=1d&interval=5m`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySym)}?range=${range}&interval=${interval}`;
 
   try {
     const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 StockTracker" } });
@@ -39,7 +45,7 @@ module.exports = async (req, res) => {
     const timestamps = result.timestamp || [];
     const closes = result.indicators?.quote?.[0]?.close || [];
 
-    // chartPreviousClose is yesterday's close — used to color the line green/red
+    // chartPreviousClose = start-of-period reference for green/red coloring
     const open = meta.chartPreviousClose ?? meta.previousClose ?? null;
     const currency = meta.currency || (market === "us" ? "USD" : "TWD");
 
