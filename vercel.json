@@ -9,6 +9,7 @@
     { "src": "/api/price", "dest": "/api/price.js" },
     { "src": "/api/fx", "dest": "/api/fx.js" },
     { "src": "/api/ocr", "dest": "/api/ocr.js" },
+    { "src": "/api/chart", "dest": "/api/chart.js" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
 }
