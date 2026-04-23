@@ -8,6 +8,7 @@
   "routes": [
     { "src": "/api/price", "dest": "/api/price.js" },
     { "src": "/api/fx", "dest": "/api/fx.js" },
+    { "src": "/api/ocr", "dest": "/api/ocr.js" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
 }

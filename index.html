@@ -225,7 +225,7 @@
   <div class="modal-body">
     <label for="shotInput" class="drop" id="drop">
       Tap or drop one or more screenshots here.<br>
-      <span class="muted">We run OCR locally on your device — nothing is uploaded.<br>
+      <span class="muted">Gemini AI extracts holdings from any broker format (元大, 富邦, Schwab…).<br>
       You can drop 上市 / 上櫃 / 興櫃 / US screenshots together — each row gets its own market picker.</span>
     </label>
     <input id="shotInput" type="file" accept="image/*" multiple style="opacity:0;position:absolute;width:0;height:0" />
@@ -243,9 +243,6 @@
     <div class="progress" id="ocrProgressWrap" style="display:none"><div class="bar" id="ocrProgress"></div></div>
     <div id="ocrStatus" class="muted" style="margin-top:6px"></div>
     <div id="candidates"></div>
-    <details style="margin-top:10px"><summary class="muted">Raw OCR text</summary>
-      <div class="ocr-preview" id="ocrText"></div>
-    </details>
   </div>
   <div class="modal-foot">
     <button id="ocrCancel">Cancel</button>
@@ -298,7 +295,7 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- OCR: Tesseract (loaded lazily) -->
+<!-- Main app script -->
 <script>
 (function(){
   "use strict";
@@ -663,33 +660,17 @@
     state.positions = []; state.prices = {}; render(); toast("Wiped");
   };
 
-  // ---------- OCR ----------
-  let tesseractReady = null;
-  function loadTesseract() {
-    if (tesseractReady) return tesseractReady;
-    tesseractReady = new Promise((resolve, reject) => {
-      const s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js";
-      s.onload = () => resolve(window.Tesseract);
-      s.onerror = () => reject(new Error("Failed to load Tesseract.js — need internet"));
-      document.head.appendChild(s);
-    });
-    return tesseractReady;
-  }
-
+  // ---------- OCR (Gemini Vision) ----------
   let accumulatedCandidates = [];
-  let accumulatedText = [];
 
   function openOcr() {
     $("#shotInput").value = "";
     $("#ocrStatus").textContent = "";
-    $("#ocrText").textContent = "";
     $("#candidates").innerHTML = "";
     $("#ocrAddAll").disabled = true;
     $("#ocrProgressWrap").style.display = "none";
     $("#ocrProgress").style.width = "0%";
     accumulatedCandidates = [];
-    accumulatedText = [];
     $("#ocrDialog").showModal();
   }
   $("#closeOcr").onclick = () => $("#ocrDialog").close();
@@ -697,8 +678,7 @@
 
   const drop = $("#drop");
   // The drop zone is a <label for="shotInput">, so the browser opens the file
-  // picker natively on click — no JS click handler needed (and adding one with
-  // preventDefault breaks it).
+  // picker natively on click — no JS click handler needed.
   drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("hover"); });
   drop.addEventListener("dragleave", () => drop.classList.remove("hover"));
   drop.addEventListener("drop", (e) => {
@@ -711,198 +691,87 @@
     if (files.length) handleShots(files);
   });
 
+  // Resize + JPEG-compress before upload to stay under Vercel's 4.5MB body limit.
+  function compressImage(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const scale = Math.min(1, 2048 / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve({ data: reader.result.split(",")[1], mimeType: "image/jpeg" });
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        }, "image/jpeg", 0.85);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Image load failed")); };
+      img.src = url;
+    });
+  }
+
   async function handleShots(files) {
-    $("#ocrStatus").textContent = `Loading OCR engine…`;
+    $("#ocrStatus").textContent = "Processing with AI…";
     $("#ocrProgressWrap").style.display = "";
-    $("#ocrProgress").style.width = "0%";
-    const setP = (p) => $("#ocrProgress").style.width = (p * 100).toFixed(0) + "%";
-
-    let T;
-    try { T = await loadTesseract(); }
-    catch (e) { $("#ocrStatus").textContent = e.message; return; }
-
+    $("#ocrProgress").style.width = "20%";
     const defaultMarket = $("#ocrMarket").value;
-    let currentFileIdx = -1;
 
-    // Let Tesseract use its default worker loader: it fetches worker.min.js
-    // from the CDN and wraps it in a same-origin blob URL, which the Worker
-    // constructor will accept. Constructing `new Worker(<cross-origin URL>)`
-    // directly (the previous workerBlobURL:false path) is blocked by the
-    // browser's same-origin policy on public origins.
-    let worker;
+    let images;
     try {
-      worker = await T.createWorker("chi_tra+eng", 1, {
-        corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0",
-        langPath: "https://tessdata.projectnaptha.com/4.0.0",
-        logger: m => {
-          if (m.status === "recognizing text" && currentFileIdx >= 0) {
-            const overall = (currentFileIdx + m.progress) / files.length;
-            setP(overall);
-          }
-        }
-      });
+      images = await Promise.all(files.map(compressImage));
     } catch (e) {
-      $("#ocrStatus").textContent = `OCR engine init failed: ${e.message}`;
+      $("#ocrStatus").textContent = "Failed to read image: " + e.message;
       return;
     }
 
-    for (let i = 0; i < files.length; i++) {
-      currentFileIdx = i;
-      const file = files[i];
-      $("#ocrStatus").textContent = `Recognizing image ${i+1}/${files.length}: ${file.name}…`;
-      try {
-        const res = await worker.recognize(file);
-        const text = res.data.text || "";
-        accumulatedText.push(`=== ${file.name} ===\n${text}`);
-        const cands = parseCandidates(text, defaultMarket);
-        for (const c of cands) accumulatedCandidates.push(c);
-      } catch (e) {
-        console.warn("OCR failed on", file.name, e);
-        accumulatedText.push(`=== ${file.name} ===\n(OCR failed: ${e.message})`);
+    $("#ocrProgress").style.width = "50%";
+
+    const base = (state.settings.apiBase || window.location.origin).replace(/\/$/, "");
+    let holdings;
+    try {
+      const r = await fetch(`${base}/api/ocr`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images }),
+      });
+      $("#ocrProgress").style.width = "90%";
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "HTTP " + r.status);
       }
+      holdings = await r.json();
+    } catch (e) {
+      $("#ocrStatus").textContent = "AI processing failed: " + e.message;
+      $("#ocrProgressWrap").style.display = "none";
+      return;
     }
 
-    try { await worker.terminate(); } catch {}
+    $("#ocrProgress").style.width = "100%";
 
-    // Dedupe across all images by symbol+qty+cost
+    // Dedupe by symbol+qty+cost
     const seen = new Set();
-    accumulatedCandidates = accumulatedCandidates.filter(c => {
-      const k = `${c.symbol}|${c.qty}|${c.cost}`;
+    holdings = (Array.isArray(holdings) ? holdings : []).filter(h => {
+      const k = `${h.symbol}|${h.qty}|${h.cost}`;
       if (seen.has(k)) return false;
       seen.add(k);
       return true;
-    });
+    }).map(h => ({ ...h, market: h.market || defaultMarket }));
 
-    $("#ocrText").textContent = accumulatedText.join("\n\n");
+    accumulatedCandidates = holdings;
     renderCandidates(accumulatedCandidates);
 
     const counts = accumulatedCandidates.reduce((acc, c) => {
       acc[c.market] = (acc[c.market] || 0) + 1; return acc;
     }, {});
-    const breakdown = Object.entries(counts)
-      .map(([k, v]) => `${marketLabel[k] || k}: ${v}`).join(" · ");
+    const breakdown = Object.entries(counts).map(([k, v]) => `${marketLabel[k] || k}: ${v}`).join(" · ");
     $("#ocrStatus").textContent = accumulatedCandidates.length
-      ? `Found ${accumulatedCandidates.length} row(s) across ${files.length} image(s). ${breakdown ? `(${breakdown})` : ""} Review and select.`
-      : `No rows detected across ${files.length} image(s). Try clearer screenshots or add manually.`;
-  }
-
-  // Words that shouldn't be treated as tickers
-  const NOT_A_TICKER = /^(BUY|SELL|NEW|USD|TWD|NTD|HKD|EUR|GBP|JPY|CNY|KRW|ROC|STOCK|LOT|SHARES?|QTY|AVG|TOTAL|COST|MARKET|VALUE|PL|PNL|SH|DAY|NET|GAIN|LOSS|OPEN|HIGH|LOW|CLOSE|VOL|VOLUME|DIV|YTD|MTD|YTM|EPS|PE|PB|ROI|ROE|NT|NAV|ADR|ETF|IPO|OTC|ASK|BID|MID|CHG|CHANGE|AM|PM|UTC|EST|PST|GMT|TW|TWN|TSE|TPEX|NY|ADD|REM|REG|PRE|AH|SYM|TICKER|ACCT|HOLD|DPS|YLD|DIF|TAX|FEE|INT|CUM|EX|ADJ)$/i;
-
-  // Returns the market code if the line is a section header or contains an inline
-  // market label (元大/富邦 apps sometimes put 上市/上櫃/興櫃 on the same row as the stock).
-  function detectMarketFromHeader(line) {
-    if (/上市|集中市場|TWSE/i.test(line)) return "tw";
-    if (/上櫃|店頭市場|櫃買|TPEX/i.test(line)) return "twotc";
-    if (/興櫃|Emerging/i.test(line)) return "emerging";
-    if (/美股|海外股票?|US\s*Stocks?|NASDAQ|NYSE|AMEX/i.test(line)) return "us";
-    return null;
-  }
-
-  // Heuristic parser: looks for stock-like rows.
-  // TW tickers: 4-digit numeric (e.g. 2330). Also 5-6 digit for 興櫃 sometimes.
-  // US tickers: 2-5 uppercase letters — only matched when currentMarket is "us"
-  // to prevent false positives on TW broker screenshots (column headers, OCR noise).
-  function parseCandidates(text, defaultMarket) {
-    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    const out = [];
-    let currentMarket = defaultMarket;
-
-    for (const rawLine of lines) {
-      // Update market context from section headers in the screenshot
-      const headerMkt = detectMarketFromHeader(rawLine);
-      if (headerMkt) currentMarket = headerMkt;
-
-      // Clean the line a bit — OCR often adds spurious angle brackets / pipes
-      const line = rawLine.replace(/[<>]/g, " ").replace(/\s+/g, " ").trim();
-      if (!line) continue;
-
-      let sym = null;
-      let symMarket = null;
-      let symPos = -1;
-
-      // Prefer TW-style 4-6 digit code (optionally followed by single letter, e.g. 3105A)
-      let m = line.match(/(?:^|[\s|│┃【(])(\d{4,6}[A-Z]?)(?=[\s)】|│┃.]|$)/);
-      if (m) {
-        sym = m[1];
-        // If the line itself has a market label (e.g. "2330 台積電 上市 ...") prefer that
-        // over the section-level currentMarket so mixed-market screenshots parse correctly.
-        const lineMkt = detectMarketFromHeader(line);
-        symMarket = lineMkt || (currentMarket === "us" ? "tw" : currentMarket);
-        symPos = line.indexOf(sym);
-      }
-
-      // US-style 2-5 letter ticker — only attempt when we're in a US section.
-      // Skipping this on TW broker screenshots prevents OCR noise / column headers
-      // (e.g. "HAE", "TWD", broker-app labels) from being misread as US stocks.
-      if (!sym && currentMarket === "us") {
-        m = line.match(/(?:^|[\s|│┃])([A-Z]{2,5})(?=[\s.]|$)/);
-        if (m && !NOT_A_TICKER.test(m[1])) {
-          sym = m[1];
-          symMarket = "us";
-          symPos = line.indexOf(sym);
-        }
-      }
-      if (!sym) continue;
-
-      // Everything after the symbol
-      const afterSym = line.slice(symPos + sym.length);
-
-      // Extract numeric tokens
-      const numRe = /[-+]?\d[\d,]*\.?\d*/g;
-      const nums = [];
-      let nm;
-      while ((nm = numRe.exec(afterSym)) !== null) {
-        const raw = nm[0];
-        const v = parseFloat(raw.replace(/,/g, ""));
-        if (!isFinite(v) || v === 0) continue;
-        nums.push({ v, raw, hasDecimal: raw.includes("."), pos: nm.index });
-      }
-      if (nums.length < 2) continue;
-
-      // Pick qty: first plausible positive integer (no decimal), max 10M shares.
-      // This avoids the bug where market value (big integer at end) was chosen.
-      const MAX_QTY = 10_000_000;
-      let qty = null, qtyIdx = -1;
-      for (let i = 0; i < nums.length; i++) {
-        const n = nums[i];
-        if (!n.hasDecimal && n.v >= 1 && n.v <= MAX_QTY) {
-          qty = n.v; qtyIdx = i; break;
-        }
-      }
-      if (qty == null) continue;
-
-      // Pick cost: first decimal number after qty; fallback = next number after qty.
-      let cost = null;
-      for (let i = qtyIdx + 1; i < nums.length; i++) {
-        const n = nums[i];
-        if (n.hasDecimal && n.v > 0 && n.v < 1_000_000) { cost = n.v; break; }
-      }
-      if (cost == null && qtyIdx + 1 < nums.length) cost = nums[qtyIdx + 1].v;
-      if (cost == null) {
-        // If we only have one number and it's decimal-ish, treat it as cost with no qty — skip.
-        continue;
-      }
-
-      // Sanity: reject rows where qty == cost (often means OCR duplicated a single number)
-      if (qty === cost) continue;
-
-      // Name: text between symbol and first numeric
-      const firstNumPos = nums[0].pos;
-      const namePart = afterSym.slice(0, firstNumPos)
-        .replace(/[|│┃【】()\[\]]/g, " ")
-        .trim();
-
-      out.push({
-        symbol: sym,
-        name: namePart.slice(0, 24),
-        qty,
-        cost,
-        market: symMarket,
-        rawLine,
-      });
-    }
-    return out;
+      ? `Found ${accumulatedCandidates.length} holding(s) from ${files.length} image(s). ${breakdown ? `(${breakdown})` : ""} Review and select.`
+      : `No holdings detected. Try a clearer screenshot or add manually.`;
   }
 
   function renderCandidates(cands) {
