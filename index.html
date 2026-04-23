@@ -134,8 +134,9 @@
 <body>
 
 <header>
-  <h1>Stock Tracker</h1>
+  <h1 data-i18n="appTitle">Stock Tracker</h1>
   <div>
+    <button id="langBtn" data-i18n="langToggle" style="font-size:11px;padding:5px 8px">中文</button>
     <button id="refreshBtn" title="Refresh prices" aria-label="Refresh prices">↻</button>
     <button id="settingsBtn" title="Settings" aria-label="Settings">⚙</button>
   </div>
@@ -143,17 +144,17 @@
 
 <main>
   <div class="summary" id="summary">
-    <div class="label">Total Unrealized P/L</div>
+    <div class="label" data-i18n="totalPLLabel">TOTAL UNREALIZED P/L</div>
     <div class="value" id="totalPL">—</div>
     <div class="sub">
-      <div>Cost <b id="totalCost">—</b></div>
-      <div>Market <b id="totalMkt">—</b></div>
-      <div>FX <b id="fxRate">—</b></div>
+      <div><span data-i18n="cost">Cost</span> <b id="totalCost">—</b></div>
+      <div><span data-i18n="mkt">Market</span> <b id="totalMkt">—</b></div>
+      <div><span data-i18n="fx">FX</span> <b id="fxRate">—</b></div>
     </div>
   </div>
 
   <div class="tabs" id="tabs">
-    <div class="tab active" data-tab="all">All</div>
+    <div class="tab active" data-tab="all" data-i18n="tabAll">All</div>
     <div class="tab" data-tab="tw">上市 TWSE</div>
     <div class="tab" data-tab="twotc">上櫃 OTC</div>
     <div class="tab" data-tab="emerging">興櫃 Emerging</div>
@@ -174,11 +175,11 @@
   <form id="posForm" class="modal-body">
     <div class="form-grid">
       <div>
-        <label>Symbol</label>
+        <label data-i18n="labelSymbol">Symbol</label>
         <input id="fSymbol" placeholder="2330 / AAPL" required autocapitalize="characters"/>
       </div>
       <div>
-        <label>Market</label>
+        <label data-i18n="labelMarket">Market</label>
         <select id="fMarket" required>
           <option value="tw">上市 TWSE</option>
           <option value="twotc">上櫃 OTC</option>
@@ -187,60 +188,59 @@
         </select>
       </div>
       <div class="full">
-        <label>Name (optional)</label>
+        <label data-i18n="labelName">Name (optional)</label>
         <input id="fName" placeholder="台積電 / Apple Inc."/>
       </div>
       <div>
-        <label>Quantity (shares)</label>
+        <label data-i18n="labelQty">Quantity (shares)</label>
         <input id="fQty" type="number" step="any" min="0" required/>
       </div>
       <div>
-        <label>Avg Cost / share</label>
+        <label data-i18n="labelCost">Avg Cost / share</label>
         <input id="fCost" type="number" step="any" min="0" required/>
       </div>
       <div>
-        <label>Account</label>
+        <label data-i18n="labelAccount">Account</label>
         <input id="fAccount" placeholder="元大 / Schwab" list="accountList"/>
         <datalist id="accountList"></datalist>
       </div>
       <div>
-        <label>Purchase date (optional)</label>
+        <label data-i18n="labelDate">Purchase date (optional)</label>
         <input id="fDate" type="date"/>
       </div>
       <div class="full">
-        <label>Notes (optional)</label>
+        <label data-i18n="labelNotes">Notes (optional)</label>
         <input id="fNotes"/>
       </div>
     </div>
   </form>
   <div class="modal-foot">
-    <button id="deleteBtn" class="danger" style="display:none">Delete</button>
-    <button id="saveBtn" class="primary">Save</button>
+    <button id="deleteBtn" class="danger" style="display:none" data-i18n="btnDelete">Delete</button>
+    <button id="saveBtn" class="primary" data-i18n="btnSave">Save</button>
   </div>
 </dialog>
 
 <!-- Screenshot import dialog -->
 <dialog id="ocrDialog">
   <div class="modal-head">
-    <strong>Upload Broker Screenshot(s)</strong>
+    <strong data-i18n="ocrTitle">Upload Broker Screenshot(s)</strong>
     <button id="closeOcr">✕</button>
   </div>
   <div class="modal-body">
     <label for="shotInput" class="drop" id="drop">
       Tap or drop one or more screenshots here.<br>
-      <span class="muted">Gemini AI extracts holdings from any broker format (元大, 富邦, Schwab…).<br>
-      You can drop 上市 / 上櫃 / 興櫃 / US screenshots together — each row gets its own market picker.</span>
+      <span class="muted">Gemini AI extracts holdings from any broker format (元大, 富邦, Schwab…). You can drop 上市 / 上櫃 / 興櫃 / US screenshots together — each row gets its own market picker.</span>
     </label>
     <input id="shotInput" type="file" accept="image/*" multiple style="opacity:0;position:absolute;width:0;height:0" />
     <div>
-      <label style="margin-top:12px">Default market (used when auto-detection is unsure)</label>
+      <label style="margin-top:12px" data-i18n="ocrDefaultMkt">Default market (used when auto-detection is unsure)</label>
       <select id="ocrMarket">
         <option value="tw">上市 TWSE</option>
         <option value="twotc">上櫃 OTC</option>
         <option value="emerging">興櫃 Emerging</option>
         <option value="us">US</option>
       </select>
-      <label>Account</label>
+      <label data-i18n="labelAccount">Account</label>
       <input id="ocrAccount" placeholder="e.g. 元大, 富邦, Schwab" list="accountList"/>
     </div>
     <div class="progress" id="ocrProgressWrap" style="display:none"><div class="bar" id="ocrProgress"></div></div>
@@ -248,51 +248,51 @@
     <div id="candidates"></div>
   </div>
   <div class="modal-foot">
-    <button id="ocrCancel">Cancel</button>
-    <button id="ocrAddAll" class="primary" disabled>Add selected</button>
+    <button id="ocrCancel" data-i18n="btnCancel">Cancel</button>
+    <button id="ocrAddAll" class="primary" disabled data-i18n="btnAddSelected">Add selected</button>
   </div>
 </dialog>
 
 <!-- Settings dialog -->
 <dialog id="settingsDialog">
   <div class="modal-head">
-    <strong>Settings</strong>
+    <strong data-i18n="settingsTitle">Settings</strong>
     <button id="closeSettings">✕</button>
   </div>
   <div class="modal-body">
-    <label>Price API base URL</label>
+    <label data-i18n="labelApiBase">Price API base URL</label>
     <input id="apiBase" placeholder="https://your-deploy.vercel.app" />
-    <div class="muted" style="margin-top:6px">Leave blank to use this deployment's own API (default). Set only if you're self-hosting elsewhere.</div>
+    <div class="muted" style="margin-top:6px" data-i18n="apiBaseHint">Leave blank to use this deployment's own API (default). Set only if you're self-hosting elsewhere.</div>
 
-    <label>FX rate (TWD per 1 USD) — override</label>
+    <label data-i18n="labelFxOverride">FX rate (TWD per 1 USD) — override</label>
     <input id="fxOverride" type="number" step="0.01" placeholder="auto"/>
 
-    <label>Display currency</label>
+    <label data-i18n="labelDispCcy">Display currency</label>
     <select id="dispCcy">
-      <option value="TWD">TWD (combine with FX)</option>
-      <option value="USD">USD (combine with FX)</option>
-      <option value="split">Split TWD / USD</option>
+      <option value="TWD" data-i18n="optTwd">TWD (combine with FX)</option>
+      <option value="USD" data-i18n="optUsd">USD (combine with FX)</option>
+      <option value="split" data-i18n="optSplit">Split TWD / USD</option>
     </select>
 
     <hr style="border-color:var(--border); margin:14px 0"/>
-    <label>Data export / import</label>
+    <label data-i18n="labelDataIO">Data export / import</label>
     <div class="actions">
-      <button id="exportBtn">Export JSON</button>
-      <button id="importBtn">Import JSON</button>
+      <button id="exportBtn" data-i18n="btnExport">Export JSON</button>
+      <button id="importBtn" data-i18n="btnImport">Import JSON</button>
       <input id="importFile" type="file" accept="application/json" style="display:none"/>
-      <button id="wipeBtn" class="danger">Wipe all data</button>
+      <button id="wipeBtn" class="danger" data-i18n="btnWipe">Wipe all data</button>
     </div>
   </div>
   <div class="modal-foot">
-    <button id="saveSettings" class="primary">Save</button>
+    <button id="saveSettings" class="primary" data-i18n="btnSave">Save</button>
   </div>
 </dialog>
 
 <!-- Screenshot / manual FAB menu -->
 <dialog id="addMenu">
   <div class="modal-body">
-    <button class="primary" id="menuManual" style="width:100%; margin-bottom:8px">✍️  Add manually</button>
-    <button id="menuScreenshot" style="width:100%">📷  Upload screenshot(s)</button>
+    <button class="primary" id="menuManual" style="width:100%; margin-bottom:8px" data-i18n="menuManual">✍️  Add manually</button>
+    <button id="menuScreenshot" style="width:100%" data-i18n="menuScreenshot">📷  Upload screenshot(s)</button>
   </div>
 </dialog>
 
@@ -309,6 +309,91 @@
   const DEFAULT_SETTINGS = { apiBase: "", fxOverride: "", dispCcy: "TWD" };
   const PRICE_CACHE_KEY = "stocktracker.prices.v1";
   const PRICE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+
+  // ---------- i18n ----------
+  const LANG_KEY = "stocktracker.lang.v1";
+  let currentLang = localStorage.getItem(LANG_KEY) || "en";
+  const STRINGS = {
+    en: {
+      appTitle: "Stock Tracker", totalPLLabel: "TOTAL UNREALIZED P/L",
+      cost: "Cost", mkt: "Market", fx: "FX", tabAll: "All",
+      addPosition: "Add Position", editPosition: "Edit Position",
+      labelSymbol: "Symbol", labelMarket: "Market", labelName: "Name (optional)",
+      labelQty: "Quantity (shares)", labelCost: "Avg Cost / share",
+      labelAccount: "Account", labelDate: "Purchase date (optional)", labelNotes: "Notes (optional)",
+      btnDelete: "Delete", btnSave: "Save",
+      ocrTitle: "Upload Broker Screenshot(s)",
+      ocrDrop: "Tap or drop one or more screenshots here.",
+      ocrDropSub: "Gemini AI extracts holdings from any broker format (元大, 富邦, Schwab…). You can drop 上市 / 上櫃 / 興櫃 / US screenshots together — each row gets its own market picker.",
+      ocrDefaultMkt: "Default market (used when auto-detection is unsure)",
+      btnCancel: "Cancel", btnAddSelected: "Add selected",
+      settingsTitle: "Settings", labelApiBase: "Price API base URL",
+      apiBaseHint: "Leave blank to use this deployment's own API (default). Set only if you're self-hosting elsewhere.",
+      labelFxOverride: "FX rate (TWD per 1 USD) — override", labelDispCcy: "Display currency",
+      optTwd: "TWD (combine with FX)", optUsd: "USD (combine with FX)", optSplit: "Split TWD / USD",
+      labelDataIO: "Data export / import",
+      btnExport: "Export JSON", btnImport: "Import JSON", btnWipe: "Wipe all data",
+      menuManual: "✍️  Add manually", menuScreenshot: "📷  Upload screenshot(s)",
+      colAvgCost: "Avg cost", colCurrent: "Current", colCostBasis: "Cost basis", colMktValue: "Market value",
+      btnEdit: "Edit", btnDup: "Duplicate", setApiFx: "set API + FX →",
+      noPositions: "No positions yet.<br>Tap <b>+</b> to add one, or upload broker screenshots.",
+      ocrProcessing: "Processing with AI…",
+      ocrFound: (n, imgs, bd) => `Found ${n} holding(s) from ${imgs} image(s).${bd ? ` (${bd})` : ""} Review and select.`,
+      ocrNone: "No holdings detected. Try a clearer screenshot or add manually.",
+      ocrErrImg: (m) => `Failed to read image: ${m}`,
+      ocrErrApi: (m) => `AI processing failed: ${m}`,
+      toastAdded: (n) => `Added ${n} position${n === 1 ? "" : "s"}`,
+      toastSaved: "Saved", toastWiped: "Wiped", toastImported: "Imported",
+      toastBadJson: "Bad JSON", toastFillFields: "Please fill required fields",
+      toastPrices: (ok, total) => ok === total ? "Prices updated" : `${ok}/${total} prices updated`,
+      confirmDelete: "Delete this position?",
+      confirmWipe: "Wipe all positions and settings? This cannot be undone.",
+      langToggle: "中文",
+    },
+    zh: {
+      appTitle: "股票追蹤", totalPLLabel: "未實現損益",
+      cost: "成本", mkt: "市值", fx: "匯率", tabAll: "全部",
+      addPosition: "新增持倉", editPosition: "編輯持倉",
+      labelSymbol: "股票代碼", labelMarket: "市場", labelName: "名稱（選填）",
+      labelQty: "數量（股）", labelCost: "平均成本／股",
+      labelAccount: "帳戶", labelDate: "買入日期（選填）", labelNotes: "備註（選填）",
+      btnDelete: "刪除", btnSave: "儲存",
+      ocrTitle: "上傳券商截圖",
+      ocrDrop: "點擊或拖曳截圖至此",
+      ocrDropSub: "Gemini AI 自動辨識任何券商格式（元大、富邦、Schwab…）。可同時上傳上市／上櫃／興櫃／美股截圖，每筆可個別選擇市場。",
+      ocrDefaultMkt: "預設市場（無法自動辨識時使用）",
+      btnCancel: "取消", btnAddSelected: "新增所選",
+      settingsTitle: "設定", labelApiBase: "價格 API 網址",
+      apiBaseHint: "留空使用本站 API（預設）。僅在自行部署時填寫。",
+      labelFxOverride: "匯率覆蓋（TWD/USD）", labelDispCcy: "顯示幣別",
+      optTwd: "台幣（含匯率換算）", optUsd: "美元（含匯率換算）", optSplit: "分開顯示 TWD / USD",
+      labelDataIO: "資料匯出／匯入",
+      btnExport: "匯出 JSON", btnImport: "匯入 JSON", btnWipe: "清除所有資料",
+      menuManual: "✍️  手動新增", menuScreenshot: "📷  上傳截圖",
+      colAvgCost: "平均成本", colCurrent: "目前價格", colCostBasis: "成本總額", colMktValue: "市值",
+      btnEdit: "編輯", btnDup: "複製", setApiFx: "設定 API + FX →",
+      noPositions: "尚無持倉。<br>點擊 <b>+</b> 新增，或上傳截圖。",
+      ocrProcessing: "AI 處理中…",
+      ocrFound: (n, imgs, bd) => `在 ${imgs} 張截圖中找到 ${n} 筆持倉${bd ? `（${bd}）` : ""}，請確認並選取。`,
+      ocrNone: "未偵測到持倉。請使用更清晰的截圖或手動新增。",
+      ocrErrImg: (m) => `圖片讀取失敗：${m}`,
+      ocrErrApi: (m) => `AI 處理失敗：${m}`,
+      toastAdded: (n) => `已新增 ${n} 筆持倉`,
+      toastSaved: "已儲存", toastWiped: "已清除", toastImported: "已匯入",
+      toastBadJson: "JSON 格式錯誤", toastFillFields: "請填寫必填欄位",
+      toastPrices: (ok, total) => ok === total ? "報價已更新" : `${ok}/${total} 筆報價已更新`,
+      confirmDelete: "確定要刪除此持倉？",
+      confirmWipe: "確定要清除所有持倉和設定？此操作無法復原。",
+      langToggle: "EN",
+    },
+  };
+  const t = (k) => (STRINGS[currentLang] || STRINGS.en)[k] ?? STRINGS.en[k] ?? k;
+  function applyLang() {
+    document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
+    const dropEl = document.getElementById("drop");
+    if (dropEl) dropEl.innerHTML = `${t("ocrDrop")}<br><span class="muted">${t("ocrDropSub")}</span>`;
+    render();
+  }
 
   const state = {
     positions: [],
@@ -399,8 +484,7 @@
     const results = await Promise.all([...uniq.values()].map(p => fetchPrice(p.symbol, p.market)));
     btn.disabled = false; btn.textContent = oldTxt;
     const miss = results.filter(x => !x).length;
-    if (miss) toast(`${results.length - miss}/${results.length} prices updated`);
-    else toast("Prices updated");
+    toast(t("toastPrices")(results.length - miss, results.length));
     render();
   }
 
@@ -452,7 +536,7 @@
       plClass = pl >= 0 ? "pos" : "neg";
     } else {
       costStr = fmtCcy(costTwd, "TWD") + " / " + fmtCcy(costUsd, "USD");
-      mktStr = "set API + FX →";
+      mktStr = t("setApiFx");
     }
     $("#totalCost").textContent = costStr;
     $("#totalMkt").textContent = mktStr + (anyMissing ? " *" : "");
@@ -468,9 +552,7 @@
     if (state.filter !== "all") list = list.filter(p => p.market === state.filter);
 
     if (!list.length) {
-      container.innerHTML = `<div class="empty">
-        No positions yet.<br>Tap <b>+</b> to add one, or upload broker screenshots.
-      </div>`;
+      container.innerHTML = `<div class="empty">${t("noPositions")}</div>`;
       return;
     }
 
@@ -529,14 +611,14 @@
             </div>
           </div>
           <div class="grid">
-            <div><div class="k">Avg cost</div><div class="v">${fmtCcy(p.cost, m.ccy)}</div></div>
-            <div><div class="k">Current</div><div class="v">${m.px != null ? fmtCcy(m.px, m.ccy) : "—"}</div></div>
-            <div><div class="k">Cost basis</div><div class="v">${fmtCcy(m.cost, m.ccy)}</div></div>
-            <div><div class="k">Market value</div><div class="v">${m.mkt != null ? fmtCcy(m.mkt, m.ccy) : "—"}</div></div>
+            <div><div class="k">${t("colAvgCost")}</div><div class="v">${fmtCcy(p.cost, m.ccy)}</div></div>
+            <div><div class="k">${t("colCurrent")}</div><div class="v">${m.px != null ? fmtCcy(m.px, m.ccy) : "—"}</div></div>
+            <div><div class="k">${t("colCostBasis")}</div><div class="v">${fmtCcy(m.cost, m.ccy)}</div></div>
+            <div><div class="k">${t("colMktValue")}</div><div class="v">${m.mkt != null ? fmtCcy(m.mkt, m.ccy) : "—"}</div></div>
           </div>
           <div class="actions">
-            <button class="edit">Edit</button>
-            <button class="dup">Duplicate</button>
+            <button class="edit">${t("btnEdit")}</button>
+            <button class="dup">${t("btnDup")}</button>
           </div>
         `;
         card.querySelector(".edit").onclick = () => openForm(p);
@@ -560,7 +642,7 @@
   let editingId = null;
   function openForm(p) {
     editingId = p?.id || null;
-    $("#formTitle").textContent = p ? "Edit Position" : "Add Position";
+    $("#formTitle").textContent = p ? t("editPosition") : t("addPosition");
     $("#fSymbol").value = p?.symbol || "";
     $("#fMarket").value = p?.market || "tw";
     $("#fName").value = p?.name || "";
@@ -586,7 +668,7 @@
       date: $("#fDate").value || "",
       notes: $("#fNotes").value.trim(),
     };
-    if (!rec.symbol || !isFinite(rec.qty) || !isFinite(rec.cost)) { toast("Please fill required fields"); return; }
+    if (!rec.symbol || !isFinite(rec.qty) || !isFinite(rec.cost)) { toast(t("toastFillFields")); return; }
     if (editingId) {
       const i = state.positions.findIndex(p => p.id === editingId);
       if (i >= 0) state.positions[i] = rec;
@@ -601,7 +683,7 @@
   $("#deleteBtn").onclick = (e) => {
     e.preventDefault();
     if (!editingId) return;
-    if (!confirm("Delete this position?")) return;
+    if (!confirm(t("confirmDelete"))) return;
     state.positions = state.positions.filter(p => p.id !== editingId);
     persist(); $("#formDialog").close(); render();
   };
@@ -653,14 +735,14 @@
       const obj = JSON.parse(await f.text());
       if (Array.isArray(obj.positions)) state.positions = obj.positions;
       if (obj.settings) state.settings = { ...DEFAULT_SETTINGS, ...obj.settings };
-      persist(); persistSettings(); render(); toast("Imported");
-    } catch { toast("Bad JSON"); }
+      persist(); persistSettings(); render(); toast(t("toastImported"));
+    } catch { toast(t("toastBadJson")); }
   };
   $("#wipeBtn").onclick = (e) => {
     e.preventDefault();
-    if (!confirm("Wipe all positions and settings? This cannot be undone.")) return;
+    if (!confirm(t("confirmWipe"))) return;
     localStorage.removeItem(LS_KEY); localStorage.removeItem(PRICE_CACHE_KEY);
-    state.positions = []; state.prices = {}; render(); toast("Wiped");
+    state.positions = []; state.prices = {}; render(); toast(t("toastWiped"));
   };
 
   // ---------- OCR (Gemini Vision) ----------
@@ -719,7 +801,7 @@
   }
 
   async function handleShots(files) {
-    $("#ocrStatus").textContent = "Processing with AI…";
+    $("#ocrStatus").textContent = t("ocrProcessing");
     $("#ocrProgressWrap").style.display = "";
     $("#ocrProgress").style.width = "20%";
     const defaultMarket = $("#ocrMarket").value;
@@ -728,7 +810,7 @@
     try {
       images = await Promise.all(files.map(compressImage));
     } catch (e) {
-      $("#ocrStatus").textContent = "Failed to read image: " + e.message;
+      $("#ocrStatus").textContent = t("ocrErrImg")(e.message);
       return;
     }
 
@@ -749,7 +831,7 @@
       }
       holdings = await r.json();
     } catch (e) {
-      $("#ocrStatus").textContent = "AI processing failed: " + e.message;
+      $("#ocrStatus").textContent = t("ocrErrApi")(e.message);
       $("#ocrProgressWrap").style.display = "none";
       return;
     }
@@ -773,8 +855,8 @@
     }, {});
     const breakdown = Object.entries(counts).map(([k, v]) => `${marketLabel[k] || k}: ${v}`).join(" · ");
     $("#ocrStatus").textContent = accumulatedCandidates.length
-      ? `Found ${accumulatedCandidates.length} holding(s) from ${files.length} image(s). ${breakdown ? `(${breakdown})` : ""} Review and select.`
-      : `No holdings detected. Try a clearer screenshot or add manually.`;
+      ? t("ocrFound")(accumulatedCandidates.length, files.length, breakdown)
+      : t("ocrNone");
   }
 
   function renderCandidates(cands) {
@@ -839,14 +921,20 @@
         added++;
       }
       persist(); $("#ocrDialog").close(); render(); refreshAll();
-      toast(`Added ${added} position${added === 1 ? "" : "s"}`);
+      toast(t("toastAdded")(added));
     };
   }
 
   // ---------- Init ----------
+  $("#langBtn").onclick = () => {
+    currentLang = currentLang === "en" ? "zh" : "en";
+    localStorage.setItem(LANG_KEY, currentLang);
+    applyLang();
+  };
+
   load();
-  render();
-  refreshAll(); // always fetch on load — uses same-origin API if no custom base is set
+  applyLang(); // sets all static text and calls render()
+  refreshAll();
 })();
 </script>
 </body>
