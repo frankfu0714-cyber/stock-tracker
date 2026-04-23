@@ -13,7 +13,8 @@
 set -euo pipefail
 
 REPO_NAME="stock-tracker"
-GH_USER="frankfu0714"
+# GH_USER is auto-detected from `gh auth status` below.
+# Override by exporting GH_USER before running this script.
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HERE"
 
@@ -67,7 +68,14 @@ if ! gh auth status >/dev/null 2>&1; then
   say "Logging in to GitHub (a browser window will open)"
   gh auth login --web --git-protocol https --hostname github.com
 fi
-ok "GitHub authenticated"
+# Detect the real authenticated username (ignores what you thought it was)
+if [[ -z "${GH_USER:-}" ]]; then
+  GH_USER="$(gh api user --jq .login 2>/dev/null || true)"
+fi
+if [[ -z "${GH_USER}" ]]; then
+  die "Could not detect your GitHub username from gh auth. Try: gh auth login"
+fi
+ok "GitHub authenticated as: ${GH_USER}"
 
 # ---------- 5. create/push repo ----------
 if gh repo view "${GH_USER}/${REPO_NAME}" >/dev/null 2>&1; then
