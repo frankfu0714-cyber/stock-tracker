@@ -785,30 +785,29 @@
   }
 
   // Words that shouldn't be treated as tickers
-  const NOT_A_TICKER = /^(BUY|SELL|NEW|USD|TWD|HKD|EUR|GBP|JPY|CNY|KRW|STOCK|LOT|SHARES?|QTY|AVG|TOTAL|COST|MARKET|VALUE|PL|PNL|SH|DAY|NET|GAIN|LOSS|OPEN|HIGH|LOW|CLOSE|VOL|VOLUME|DIV|YTD|YTM|EPS|PE|PB|ROI|ROE|NT|NAV|ADR|ETF|IPO|OTC|ASK|BID|MID|CHG|CHANGE|AM|PM|UTC|EST|PST|GMT|TW|NY|ADD|REM|REG|PRE|AH|SYM|TICKER|ACCT|HOLD)$/i;
+  const NOT_A_TICKER = /^(BUY|SELL|NEW|USD|TWD|NTD|HKD|EUR|GBP|JPY|CNY|KRW|ROC|STOCK|LOT|SHARES?|QTY|AVG|TOTAL|COST|MARKET|VALUE|PL|PNL|SH|DAY|NET|GAIN|LOSS|OPEN|HIGH|LOW|CLOSE|VOL|VOLUME|DIV|YTD|MTD|YTM|EPS|PE|PB|ROI|ROE|NT|NAV|ADR|ETF|IPO|OTC|ASK|BID|MID|CHG|CHANGE|AM|PM|UTC|EST|PST|GMT|TW|TWN|TSE|TPEX|NY|ADD|REM|REG|PRE|AH|SYM|TICKER|ACCT|HOLD|DPS|YLD|DIF|TAX|FEE|INT|CUM|EX|ADJ)$/i;
 
-  // Headers that tell us which market the subsequent rows belong to
+  // Returns the market code if the line is a section header or contains an inline
+  // market label (元大/富邦 apps sometimes put 上市/上櫃/興櫃 on the same row as the stock).
   function detectMarketFromHeader(line) {
     if (/上市|集中市場|TWSE/i.test(line)) return "tw";
-    if (/上櫃|櫃買|OTC/i.test(line)) return "twotc";
+    if (/上櫃|店頭市場|櫃買|TPEX/i.test(line)) return "twotc";
     if (/興櫃|Emerging/i.test(line)) return "emerging";
-    if (/美股|US\s*Stocks?|NASDAQ|NYSE|AMEX/i.test(line)) return "us";
+    if (/美股|海外股票?|US\s*Stocks?|NASDAQ|NYSE|AMEX/i.test(line)) return "us";
     return null;
   }
 
   // Heuristic parser: looks for stock-like rows.
   // TW tickers: 4-digit numeric (e.g. 2330). Also 5-6 digit for 興櫃 sometimes.
-  // US tickers: 2-5 uppercase letters (single letter rejected to avoid OCR noise).
-  // Key insight vs. previous version: pick the FIRST plausible integer after the
-  // symbol as qty (not the largest — the largest is usually market value),
-  // and cap qty at 10,000,000 shares as a sanity check.
+  // US tickers: 2-5 uppercase letters — only matched when currentMarket is "us"
+  // to prevent false positives on TW broker screenshots (column headers, OCR noise).
   function parseCandidates(text, defaultMarket) {
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const out = [];
     let currentMarket = defaultMarket;
 
     for (const rawLine of lines) {
-      // Update market context from headers in the screenshot
+      // Update market context from section headers in the screenshot
       const headerMkt = detectMarketFromHeader(rawLine);
       if (headerMkt) currentMarket = headerMkt;
 
@@ -824,12 +823,17 @@
       let m = line.match(/(?:^|[\s|│┃【(])(\d{4,6}[A-Z]?)(?=[\s)】|│┃.]|$)/);
       if (m) {
         sym = m[1];
-        symMarket = currentMarket === "us" ? "tw" : currentMarket;
+        // If the line itself has a market label (e.g. "2330 台積電 上市 ...") prefer that
+        // over the section-level currentMarket so mixed-market screenshots parse correctly.
+        const lineMkt = detectMarketFromHeader(line);
+        symMarket = lineMkt || (currentMarket === "us" ? "tw" : currentMarket);
         symPos = line.indexOf(sym);
       }
 
-      // Otherwise try US-style 2-5 letter ticker
-      if (!sym) {
+      // US-style 2-5 letter ticker — only attempt when we're in a US section.
+      // Skipping this on TW broker screenshots prevents OCR noise / column headers
+      // (e.g. "HAE", "TWD", broker-app labels) from being misread as US stocks.
+      if (!sym && currentMarket === "us") {
         m = line.match(/(?:^|[\s|│┃])([A-Z]{2,5})(?=[\s.]|$)/);
         if (m && !NOT_A_TICKER.test(m[1])) {
           sym = m[1];
