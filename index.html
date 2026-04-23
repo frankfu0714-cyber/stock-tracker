@@ -262,7 +262,7 @@
   <div class="modal-body">
     <label>Price API base URL</label>
     <input id="apiBase" placeholder="https://your-deploy.vercel.app" />
-    <div class="muted" style="margin-top:6px">Leave blank to disable live prices. Required for 興櫃 prices.</div>
+    <div class="muted" style="margin-top:6px">Leave blank to use this deployment's own API (default). Set only if you're self-hosting elsewhere.</div>
 
     <label>FX rate (TWD per 1 USD) — override</label>
     <input id="fxOverride" type="number" step="0.01" placeholder="auto"/>
@@ -358,9 +358,10 @@
     const key = `${market}:${symbol}`;
     const cached = state.prices[key];
     if (cached && Date.now() - cached.ts < PRICE_CACHE_TTL_MS) return cached;
-    if (!state.settings.apiBase) return null;
+    // If no API base is configured, use the same origin (app and API are co-deployed on Vercel)
+    const base = (state.settings.apiBase || window.location.origin).replace(/\/$/, "");
     try {
-      const url = `${state.settings.apiBase.replace(/\/$/, "")}/api/price?symbol=${encodeURIComponent(symbol)}&market=${market}`;
+      const url = `${base}/api/price?symbol=${encodeURIComponent(symbol)}&market=${market}`;
       const r = await fetch(url);
       if (!r.ok) throw new Error("HTTP " + r.status);
       const data = await r.json();
@@ -378,9 +379,9 @@
       state.fxUsdTwd = parseFloat(state.settings.fxOverride);
       return state.fxUsdTwd;
     }
-    if (!state.settings.apiBase) return state.fxUsdTwd;
+    const base = (state.settings.apiBase || window.location.origin).replace(/\/$/, "");
     try {
-      const url = `${state.settings.apiBase.replace(/\/$/, "")}/api/fx`;
+      const url = `${base}/api/fx`;
       const r = await fetch(url);
       if (!r.ok) throw new Error("HTTP " + r.status);
       const d = await r.json();
@@ -972,7 +973,7 @@
   // ---------- Init ----------
   load();
   render();
-  if (state.settings.apiBase) refreshAll();
+  refreshAll(); // always fetch on load — uses same-origin API if no custom base is set
 })();
 </script>
 </body>
