@@ -181,6 +181,14 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({ points, open, currency });
   } catch (e) {
+    // 興櫃 stocks are sometimes misclassified as 上市/上櫃 by OCR — mirror the price API fallback.
+    if (/404|no data/i.test(e.message) && (market === "tw" || market === "twotc")) {
+      try {
+        return res.status(200).json(await emergingHistorical(symbol, range));
+      } catch (_) {
+        return res.status(200).json({ points: [], open: null, currency: "TWD" });
+      }
+    }
     return res.status(502).json({ error: e.message || String(e) });
   }
 };
