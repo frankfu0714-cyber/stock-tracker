@@ -673,9 +673,24 @@
     // For US-only portfolios fall back to all timestamps.
     const twdTls = timelines.filter(tl => tl.isTwd);
     const masterTls = twdTls.length > 0 ? twdTls : timelines;
-    const tsSet = new Set();
-    for (const tl of masterTls) for (const pt of tl.points) tsSet.add(pt.t);
-    const timestamps = [...tsSet].sort((a, b) => a - b);
+    // 5d: use only the last timestamp of each TST trading day (daily close).
+    // Intraday 15m bars at weekly scale cause visible noise from single-day swings
+    // (e.g., a stock that opens high, dips mid-session, then recovers looks like a
+    // sharp end-of-chart dip). Daily closes show the correct week-over-week trend.
+    // Other ranges: use all TW-market timestamps for full intraday detail.
+    let timestamps;
+    if (range === "5d") {
+      const dayMap = {};
+      for (const tl of masterTls) for (const pt of tl.points) {
+        const day = Math.floor((pt.t + 28800) / 86400);
+        if (!dayMap[day] || pt.t > dayMap[day]) dayMap[day] = pt.t;
+      }
+      timestamps = Object.values(dayMap).sort((a, b) => a - b);
+    } else {
+      const tsSet = new Set();
+      for (const tl of masterTls) for (const pt of tl.points) tsSet.add(pt.t);
+      timestamps = [...tsSet].sort((a, b) => a - b);
+    }
     const portfolioPoints = [];
     for (const ts of timestamps) {
       let total = staticVal;
