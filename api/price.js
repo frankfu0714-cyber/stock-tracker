@@ -2,9 +2,9 @@
 // Returns: { price: number, currency: "TWD"|"USD", name?: string, source: string, ts: number }
 //
 // Sources:
-//   tw, twotc, us  -> Yahoo Finance (query1.finance.yahoo.com/v8/finance/chart)
-//   emerging       -> TPEx official OpenAPI (tpex_esb_latest_statistics) — full list of 興櫃
-//                     quotes, cached in memory for 60s.
+//   tw, twotc  -> Yahoo Finance for price; TWSE/TPEx OpenAPI for Chinese name (5-min cache)
+//   emerging   -> TPEx official OpenAPI (tpex_esb_latest_statistics) — full 興櫃 list, 60s cache
+//   us         -> Yahoo Finance
 
 const cors = (res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -39,9 +39,46 @@ async function yahoo(symbol, market) {
   };
 }
 
-// In-memory cache for the 興櫃 list. Warm-function lifetime only, but that's fine —
-// we fetch ~140KB once per minute regardless of how many symbols we look up.
-let _esbCache = { data: null, ts: 0 };
+// In-memory caches — warm-function lifetime only, refreshed on TTL expiry.
+let _esbCache  = { data: null, ts: 0 };   // 興櫃 full list,  60s TTL
+let _twseCache = { data: null, ts: 0 };   // TWSE name map,  5-min TTL
+let _otcCache  = { data: null, ts: 0 };   // TPEx OTC name map, 5-min TTL
+
+async function fetchTwseNames() {
+  const now = Date.now();
+  if (_twseCache.data && (now - _twseCache.ts) < 300_000) return _twseCache.data;
+  const r = await fetch("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", {
+    headers: { "User-Agent": "Mozilla/5.0 StockTracker" },
+  });
+  if (!r.ok) throw new Error("twse http " + r.status);
+  const arr = await r.json();
+  if (!Array.isArray(arr)) throw new Error("twse bad response");
+  const map = {};
+  for (const item of arr) if (item.Code && item.Name) map[item.Code.trim()] = item.Name.trim();
+  _twseCache = { data: map, ts: now };
+  return map;
+}
+
+async function fetchOtcNames() {
+  const now = Date.now();
+  if (_otcCache.data && (now - _otcCache.ts) < 300_000) return _otcCache.data;
+  const r = await fetch("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes", {
+    headers: { "User-Agent": "Mozilla/5.0 StockTracker", "Accept": "application/json",
+               "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8" },
+  });
+  if (!r.ok) throw new Error("otc http " + r.status);
+  const arr = await r.json();
+  if (!Array.isArray(arr)) throw new Error("otc bad response");
+  const map = {};
+  for (const item of arr) {
+    const code = String(item.SecuritiesCompanyCode || "").trim();
+    const name = String(item.CompanyName || "").trim();
+    if (code && name) map[code] = name;
+  }
+  _otcCache = { data: map, ts: now };
+  return map;
+}
+
 async function fetchEsbList() {
   const now = Date.now();
   if (_esbCache.data && (now - _esbCache.ts) < 60 * 1000) return _esbCache.data;
@@ -116,6 +153,14 @@ module.exports = async (req, res) => {
         } else {
           throw yahooErr;
         }
+      }
+      // Replace Yahoo's English name with the Chinese name from TWSE/TPEx.
+      // Non-fatal: if the name API fails, we keep Yahoo's English name.
+      if (data.source === "yahoo") {
+        try {
+          const names = market === "tw" ? await fetchTwseNames() : await fetchOtcNames();
+          if (names[symbol]) data = { ...data, name: names[symbol] };
+        } catch {}
       }
     } else if (market === "us") {
       data = await yahoo(symbol, market);

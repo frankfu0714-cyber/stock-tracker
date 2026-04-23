@@ -453,6 +453,14 @@
       if (typeof data.price !== "number") throw new Error(data.error || "no price");
       const rec = { price: data.price, currency: data.currency || ccyOf(market), name: data.name || "", ts: Date.now() };
       state.prices[key] = rec; persistPrices();
+      // Backfill Chinese name onto positions that have no name yet.
+      if (rec.name) {
+        let dirty = false;
+        for (const p of state.positions) {
+          if (p.market === market && p.symbol === symbol && !p.name) { p.name = rec.name; dirty = true; }
+        }
+        if (dirty) persist();
+      }
       return rec;
     } catch (e) {
       console.warn("price fetch failed for", key, e);
@@ -498,7 +506,7 @@
     const mkt = px != null ? (p.qty * px) : null;
     const pl = mkt != null ? (mkt - cost) : null;
     const plPct = mkt != null && cost ? ((mkt - cost) / cost * 100) : null;
-    return { px, ccy, cost, mkt, pl, plPct, name: rec?.name || p.name || "" };
+    return { px, ccy, cost, mkt, pl, plPct, name: p.name || rec?.name || "" };
   }
 
   function render() {
