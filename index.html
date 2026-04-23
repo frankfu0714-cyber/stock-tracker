@@ -105,12 +105,13 @@
   .ocr-preview { margin-top: 10px; background: var(--card-2); border-radius: 10px; padding: 10px;
     max-height: 180px; overflow: auto; font-size: 12px; white-space: pre-wrap; color: var(--muted);
   }
-  .candidate { display: flex; justify-content: space-between; align-items: center; padding: 8px;
+  .candidate { display: flex; justify-content: space-between; align-items: flex-start; padding: 8px;
     background: var(--card-2); border-radius: 8px; margin-bottom: 6px; font-size: 13px; gap: 8px;
   }
   .candidate .cb { display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0; }
   .candidate .cand-body { min-width: 0; flex: 1; }
-  .candidate .cand-mkt { width: auto; padding: 3px 6px; font-size: 11px; margin-top: 4px; }
+  .candidate .cand-mkt { width: 100%; padding: 3px 6px; font-size: 11px; margin-top: 4px; }
+  .candidate .edit-cand { flex-shrink: 0; font-size: 11px; padding: 4px 10px; white-space: nowrap; }
   .progress { height: 4px; background: var(--card-2); border-radius: 2px; overflow: hidden; margin: 8px 0; }
   .progress .bar { height: 100%; background: var(--accent); width: 0%; transition: width .2s ease; }
   .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
@@ -237,7 +238,7 @@
         <option value="us">US</option>
       </select>
       <label>Account</label>
-      <input id="ocrAccount" placeholder="元大 / 富邦 / Schwab" list="accountList"/>
+      <input id="ocrAccount" placeholder="e.g. 元大, 富邦, Schwab" list="accountList"/>
     </div>
     <div class="progress" id="ocrProgressWrap" style="display:none"><div class="bar" id="ocrProgress"></div></div>
     <div id="ocrStatus" class="muted" style="margin-top:6px"></div>
