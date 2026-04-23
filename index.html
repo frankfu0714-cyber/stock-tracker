@@ -722,16 +722,16 @@
     const defaultMarket = $("#ocrMarket").value;
     let currentFileIdx = -1;
 
-    // Use explicit worker/core/lang paths and disable the blob-URL worker,
-    // which avoids CSP failures in sandboxed preview iframes (the
-    // "Script at 'blob:...' cannot be accessed from origin" error).
+    // Let Tesseract use its default worker loader: it fetches worker.min.js
+    // from the CDN and wraps it in a same-origin blob URL, which the Worker
+    // constructor will accept. Constructing `new Worker(<cross-origin URL>)`
+    // directly (the previous workerBlobURL:false path) is blocked by the
+    // browser's same-origin policy on public origins.
     let worker;
     try {
       worker = await T.createWorker("chi_tra+eng", 1, {
-        workerBlobURL: false,
-        workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/worker.min.js",
-        corePath:   "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0",
-        langPath:   "https://tessdata.projectnaptha.com/4.0.0",
+        corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0",
+        langPath: "https://tessdata.projectnaptha.com/4.0.0",
         logger: m => {
           if (m.status === "recognizing text" && currentFileIdx >= 0) {
             const overall = (currentFileIdx + m.progress) / files.length;
