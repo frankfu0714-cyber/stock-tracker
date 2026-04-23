@@ -61,14 +61,15 @@ function rocToUnix(rocDateStr) {
 }
 
 async function emergingHistorical(symbol, range) {
-  // No intraday data exists for 興櫃 stocks
-  if (range === "1d") return { points: [], open: null, currency: "TWD" };
-
-  // Try Yahoo with .TWO suffix — some 興櫃 stocks have data there
+  // Try Yahoo with .TWO suffix for all ranges — covers 1d intraday (5m) and multi-day (1d candles)
+  const yahooInterval = RANGE_INTERVAL[range] || "5m";
   try {
-    const data = await yahooChart(`${symbol}.TWO`, range, "1d");
+    const data = await yahooChart(`${symbol}.TWO`, range, yahooInterval);
     if (data.points.length >= 2) return { ...data, currency: "TWD" };
   } catch (_) {}
+
+  // 1d: no other intraday source available for 興櫃
+  if (range === "1d") return { points: [], open: null, currency: "TWD" };
 
   // 1y: skip TPEx (would require 12 monthly fetches)
   if (range === "1y") return { points: [], open: null, currency: "TWD" };

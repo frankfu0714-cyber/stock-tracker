@@ -631,8 +631,11 @@
       if (ccy === disp) return val;
       return disp === "USD" ? (fx ? val / fx : 0) : (fx ? val * fx : 0);
     };
-    // Taiwan trading window filter: 09:00–13:30 TST (UTC+8)
-    const inTwWindow = (t) => { const s = (t + 28800) % 86400; return s >= 32400 && s <= 48600; };
+    // Taiwan trading window: 09:00–13:30 TST for TWSE/OTC, 09:00–15:30 for 興櫃
+    const inTwWindow = (t, market) => {
+      const s = (t + 28800) % 86400;
+      return s >= 32400 && s <= (market === "emerging" ? 55800 : 48600);
+    };
 
     // Split positions: dynamic (have chart data) vs static (no chart data — use current price as flat line)
     const timelines = [];
@@ -651,7 +654,7 @@
 
       if (cd && cd.points.length >= 2) {
         // 1d + TW/TWOTC/emerging: clip to official trading hours 09:00–13:30 TST
-        const pts = (range === "1d") ? cd.points.filter(pt => inTwWindow(pt.t)) : cd.points;
+        const pts = (range === "1d") ? cd.points.filter(pt => inTwWindow(pt.t, p.market)) : cd.points;
         if (pts.length >= 2) {
           timelines.push({ points: pts, qty: p.qty, ccy, open: cd.open });
         } else {
@@ -860,7 +863,7 @@
                 pts = cd.open != null ? [{ t: 0, p: cd.open }, { t: 1, p: cd.open }] : [];
               } else {
                 // TW/TWOTC/emerging: clip to 09:00–13:30 TST
-                pts = pts.filter(pt => { const s = (pt.t + 28800) % 86400; return s >= 32400 && s <= 48600; });
+                pts = pts.filter(pt => { const s = (pt.t + 28800) % 86400; return s >= 32400 && s <= (p.market === "emerging" ? 55800 : 48600); });
               }
             }
             return pts.length >= 2 ? buildSparkline(pts, cd.open, 300, 60) : "";
