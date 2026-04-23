@@ -106,9 +106,11 @@
     max-height: 180px; overflow: auto; font-size: 12px; white-space: pre-wrap; color: var(--muted);
   }
   .candidate { display: flex; justify-content: space-between; align-items: center; padding: 8px;
-    background: var(--card-2); border-radius: 8px; margin-bottom: 6px; font-size: 13px;
+    background: var(--card-2); border-radius: 8px; margin-bottom: 6px; font-size: 13px; gap: 8px;
   }
-  .candidate .cb { display: flex; align-items: center; gap: 8px; }
+  .candidate .cb { display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0; }
+  .candidate .cand-body { min-width: 0; flex: 1; }
+  .candidate .cand-mkt { width: auto; padding: 3px 6px; font-size: 11px; margin-top: 4px; }
   .progress { height: 4px; background: var(--card-2); border-radius: 2px; overflow: hidden; margin: 8px 0; }
   .progress .bar { height: 100%; background: var(--accent); width: 0%; transition: width .2s ease; }
   .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
@@ -130,8 +132,8 @@
 <header>
   <h1>Stock Tracker</h1>
   <div>
-    <button id="refreshBtn" title="Refresh prices">↻</button>
-    <button id="settingsBtn" title="Settings">⚙</button>
+    <button id="refreshBtn" title="Refresh prices" aria-label="Refresh prices">↻</button>
+    <button id="settingsBtn" title="Settings" aria-label="Settings">⚙</button>
   </div>
 </header>
 
@@ -216,17 +218,18 @@
 <!-- Screenshot import dialog -->
 <dialog id="ocrDialog">
   <div class="modal-head">
-    <strong>Upload Broker Screenshot</strong>
+    <strong>Upload Broker Screenshot(s)</strong>
     <button id="closeOcr">✕</button>
   </div>
   <div class="modal-body">
     <label for="shotInput" class="drop" id="drop">
-      Tap or drop a screenshot here.<br>
-      <span class="muted">We run OCR locally on your device — nothing is uploaded.</span>
+      Tap or drop one or more screenshots here.<br>
+      <span class="muted">We run OCR locally on your device — nothing is uploaded.<br>
+      You can drop 上市 / 上櫃 / 興櫃 / US screenshots together — each row gets its own market picker.</span>
     </label>
-    <input id="shotInput" type="file" accept="image/*" style="display:none" />
+    <input id="shotInput" type="file" accept="image/*" multiple style="display:none" />
     <div>
-      <label style="margin-top:12px">Default market for parsed rows</label>
+      <label style="margin-top:12px">Default market (used when auto-detection is unsure)</label>
       <select id="ocrMarket">
         <option value="tw">上市 TWSE</option>
         <option value="twotc">上櫃 OTC</option>
@@ -288,7 +291,7 @@
 <dialog id="addMenu">
   <div class="modal-body">
     <button class="primary" id="menuManual" style="width:100%; margin-bottom:8px">✍️  Add manually</button>
-    <button id="menuScreenshot" style="width:100%">📷  Upload screenshot</button>
+    <button id="menuScreenshot" style="width:100%">📷  Upload screenshot(s)</button>
   </div>
 </dialog>
 
@@ -333,6 +336,9 @@
   // ---------- Helpers ----------
   const $ = (sel) => document.querySelector(sel);
   const uid = () => Math.random().toString(36).slice(2, 10);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
   const fmtCcy = (v, ccy) => {
     if (!isFinite(v)) return "—";
     const opts = { minimumFractionDigits: 0, maximumFractionDigits: 2 };
@@ -405,20 +411,8 @@
     const cost = (p.qty * p.cost);
     const mkt = px != null ? (p.qty * px) : null;
     const pl = mkt != null ? (mkt - cost) : null;
-    const plPct = mkt != null ? ((mkt - cost) / cost * 100) : null;
+    const plPct = mkt != null && cost ? ((mkt - cost) / cost * 100) : null;
     return { px, ccy, cost, mkt, pl, plPct, name: rec?.name || p.name || "" };
-  }
-
-  function toDisplay(value, ccy) {
-    const d = state.settings.dispCcy;
-    if (d === "split") return { value, ccy };
-    const targetCcy = d;
-    const fx = state.fxUsdTwd;
-    if (!fx) return { value, ccy };
-    if (ccy === targetCcy) return { value, ccy: targetCcy };
-    if (ccy === "USD" && targetCcy === "TWD") return { value: value * fx, ccy: "TWD" };
-    if (ccy === "TWD" && targetCcy === "USD") return { value: value / fx, ccy: "USD" };
-    return { value, ccy };
   }
 
   function render() {
@@ -473,12 +467,11 @@
 
     if (!list.length) {
       container.innerHTML = `<div class="empty">
-        No positions yet.<br>Tap <b>+</b> to add one, or upload a broker screenshot.
+        No positions yet.<br>Tap <b>+</b> to add one, or upload broker screenshots.
       </div>`;
       return;
     }
 
-    // Sort by absolute P/L desc if available, else by cost desc
     list.sort((a, b) => {
       const ma = posMetrics(a), mb = posMetrics(b);
       const va = ma.pl != null ? Math.abs(ma.pl) : ma.cost;
@@ -486,7 +479,6 @@
       return vb - va;
     });
 
-    // Group by account
     const byAcct = {};
     for (const p of list) { (byAcct[p.account || "—"] ||= []).push(p); }
     const accts = Object.keys(byAcct).sort();
@@ -509,7 +501,7 @@
       const plText = acctPL != null
         ? `${(acctPL >= 0 ? "+" : "") + fmtCcy(acctPL, mixed ? "TWD" : acctCcy)}  (${fmtPct(acctCost ? acctPL/acctCost*100 : NaN)})`
         : "—";
-      head.innerHTML = `<span>${acct}</span><span class="sub-pill ${acctPL >= 0 ? "pos" : "neg"}">${plText}</span>`;
+      head.innerHTML = `<span>${esc(acct)}</span><span class="sub-pill ${acctPL >= 0 ? "pos" : "neg"}">${esc(plText)}</span>`;
       grp.appendChild(head);
 
       for (const p of items) {
@@ -519,12 +511,12 @@
         card.innerHTML = `
           <div class="top">
             <div>
-              <div class="sym">${p.symbol}</div>
-              <div class="name">${(m.name || "").replace(/</g,"&lt;")}</div>
+              <div class="sym">${esc(p.symbol)}</div>
+              <div class="name">${esc(m.name || "")}</div>
               <div class="meta">
-                <span class="chip">${marketLabel[p.market]}</span>
+                <span class="chip">${esc(marketLabel[p.market] || p.market)}</span>
                 <span class="chip">${p.qty.toLocaleString()} sh</span>
-                ${p.date ? `<span class="chip">${p.date}</span>` : ""}
+                ${p.date ? `<span class="chip">${esc(p.date)}</span>` : ""}
               </div>
             </div>
             <div style="text-align:right">
@@ -683,96 +675,226 @@
     return tesseractReady;
   }
 
+  let accumulatedCandidates = [];
+  let accumulatedText = [];
+
   function openOcr() {
     $("#shotInput").value = "";
     $("#ocrStatus").textContent = "";
     $("#ocrText").textContent = "";
     $("#candidates").innerHTML = "";
     $("#ocrAddAll").disabled = true;
+    $("#ocrProgressWrap").style.display = "none";
+    $("#ocrProgress").style.width = "0%";
+    accumulatedCandidates = [];
+    accumulatedText = [];
     $("#ocrDialog").showModal();
   }
   $("#closeOcr").onclick = () => $("#ocrDialog").close();
   $("#ocrCancel").onclick = () => $("#ocrDialog").close();
 
   const drop = $("#drop");
-  drop.addEventListener("click", () => $("#shotInput").click());
+  // The drop zone is a <label for="shotInput">, so the browser opens the file
+  // picker natively on click — no JS click handler needed (and adding one with
+  // preventDefault breaks it).
   drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("hover"); });
   drop.addEventListener("dragleave", () => drop.classList.remove("hover"));
   drop.addEventListener("drop", (e) => {
     e.preventDefault(); drop.classList.remove("hover");
-    if (e.dataTransfer.files?.[0]) handleShot(e.dataTransfer.files[0]);
+    const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith("image/"));
+    if (files.length) handleShots(files);
   });
   $("#shotInput").addEventListener("change", (e) => {
-    if (e.target.files?.[0]) handleShot(e.target.files[0]);
+    const files = Array.from(e.target.files || []);
+    if (files.length) handleShots(files);
   });
 
-  async function handleShot(file) {
-    $("#ocrStatus").textContent = "Loading OCR engine…";
+  async function handleShots(files) {
+    $("#ocrStatus").textContent = `Loading OCR engine…`;
     $("#ocrProgressWrap").style.display = "";
-    const setP = (p) => $("#ocrProgress").style.width = (p*100).toFixed(0) + "%";
+    $("#ocrProgress").style.width = "0%";
+    const setP = (p) => $("#ocrProgress").style.width = (p * 100).toFixed(0) + "%";
+
     let T;
     try { T = await loadTesseract(); }
     catch (e) { $("#ocrStatus").textContent = e.message; return; }
-    $("#ocrStatus").textContent = "Recognizing…";
+
+    const defaultMarket = $("#ocrMarket").value;
+    let currentFileIdx = -1;
+
+    // Use explicit worker/core/lang paths and disable the blob-URL worker,
+    // which avoids CSP failures in sandboxed preview iframes (the
+    // "Script at 'blob:...' cannot be accessed from origin" error).
+    let worker;
     try {
-      const res = await T.recognize(file, "chi_tra+eng", { logger: m => {
-        if (m.status === "recognizing text") setP(m.progress);
-      }});
-      const text = res.data.text || "";
-      $("#ocrText").textContent = text;
-      const cands = parseCandidates(text);
-      renderCandidates(cands);
-      $("#ocrStatus").textContent = `Found ${cands.length} possible rows. Review and select.`;
+      worker = await T.createWorker("chi_tra+eng", 1, {
+        workerBlobURL: false,
+        workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/worker.min.js",
+        corePath:   "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0",
+        langPath:   "https://tessdata.projectnaptha.com/4.0.0",
+        logger: m => {
+          if (m.status === "recognizing text" && currentFileIdx >= 0) {
+            const overall = (currentFileIdx + m.progress) / files.length;
+            setP(overall);
+          }
+        }
+      });
     } catch (e) {
-      $("#ocrStatus").textContent = "OCR failed: " + e.message;
+      $("#ocrStatus").textContent = `OCR engine init failed: ${e.message}`;
+      return;
     }
+
+    for (let i = 0; i < files.length; i++) {
+      currentFileIdx = i;
+      const file = files[i];
+      $("#ocrStatus").textContent = `Recognizing image ${i+1}/${files.length}: ${file.name}…`;
+      try {
+        const res = await worker.recognize(file);
+        const text = res.data.text || "";
+        accumulatedText.push(`=== ${file.name} ===\n${text}`);
+        const cands = parseCandidates(text, defaultMarket);
+        for (const c of cands) accumulatedCandidates.push(c);
+      } catch (e) {
+        console.warn("OCR failed on", file.name, e);
+        accumulatedText.push(`=== ${file.name} ===\n(OCR failed: ${e.message})`);
+      }
+    }
+
+    try { await worker.terminate(); } catch {}
+
+    // Dedupe across all images by symbol+qty+cost
+    const seen = new Set();
+    accumulatedCandidates = accumulatedCandidates.filter(c => {
+      const k = `${c.symbol}|${c.qty}|${c.cost}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+
+    $("#ocrText").textContent = accumulatedText.join("\n\n");
+    renderCandidates(accumulatedCandidates);
+
+    const counts = accumulatedCandidates.reduce((acc, c) => {
+      acc[c.market] = (acc[c.market] || 0) + 1; return acc;
+    }, {});
+    const breakdown = Object.entries(counts)
+      .map(([k, v]) => `${marketLabel[k] || k}: ${v}`).join(" · ");
+    $("#ocrStatus").textContent = accumulatedCandidates.length
+      ? `Found ${accumulatedCandidates.length} row(s) across ${files.length} image(s). ${breakdown ? `(${breakdown})` : ""} Review and select.`
+      : `No rows detected across ${files.length} image(s). Try clearer screenshots or add manually.`;
+  }
+
+  // Words that shouldn't be treated as tickers
+  const NOT_A_TICKER = /^(BUY|SELL|NEW|USD|TWD|HKD|EUR|GBP|JPY|CNY|KRW|STOCK|LOT|SHARES?|QTY|AVG|TOTAL|COST|MARKET|VALUE|PL|PNL|SH|DAY|NET|GAIN|LOSS|OPEN|HIGH|LOW|CLOSE|VOL|VOLUME|DIV|YTD|YTM|EPS|PE|PB|ROI|ROE|NT|NAV|ADR|ETF|IPO|OTC|ASK|BID|MID|CHG|CHANGE|AM|PM|UTC|EST|PST|GMT|TW|NY|ADD|REM|REG|PRE|AH|SYM|TICKER|ACCT|HOLD)$/i;
+
+  // Headers that tell us which market the subsequent rows belong to
+  function detectMarketFromHeader(line) {
+    if (/上市|集中市場|TWSE/i.test(line)) return "tw";
+    if (/上櫃|櫃買|OTC/i.test(line)) return "twotc";
+    if (/興櫃|Emerging/i.test(line)) return "emerging";
+    if (/美股|US\s*Stocks?|NASDAQ|NYSE|AMEX/i.test(line)) return "us";
+    return null;
   }
 
   // Heuristic parser: looks for stock-like rows.
-  // TW tickers: 4-digit numeric (e.g. 2330). Also 6-digit for 興櫃 sometimes.
-  // US tickers: 1-5 uppercase letters.
-  // Quantity typically integer 100+; cost often has decimals.
-  function parseCandidates(text) {
+  // TW tickers: 4-digit numeric (e.g. 2330). Also 5-6 digit for 興櫃 sometimes.
+  // US tickers: 2-5 uppercase letters (single letter rejected to avoid OCR noise).
+  // Key insight vs. previous version: pick the FIRST plausible integer after the
+  // symbol as qty (not the largest — the largest is usually market value),
+  // and cap qty at 10,000,000 shares as a sanity check.
+  function parseCandidates(text, defaultMarket) {
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const out = [];
-    const seen = new Set();
-    const numRe = /[-+]?[\d,]*\.?\d+/g;
-    for (const line of lines) {
+    let currentMarket = defaultMarket;
+
+    for (const rawLine of lines) {
+      // Update market context from headers in the screenshot
+      const headerMkt = detectMarketFromHeader(rawLine);
+      if (headerMkt) currentMarket = headerMkt;
+
+      // Clean the line a bit — OCR often adds spurious angle brackets / pipes
+      const line = rawLine.replace(/[<>]/g, " ").replace(/\s+/g, " ").trim();
+      if (!line) continue;
+
       let sym = null;
-      // TW-style 4-6 digit code (allow suffix letter)
-      let m = line.match(/(?:^|[\s|│┃]|【|\()(\d{4,6}[A-Z]?)(?=[\s)】|│┃]|$)/);
-      if (m) sym = m[1];
-      // US ticker: standalone 1-5 letters, likely surrounded by whitespace/punct
+      let symMarket = null;
+      let symPos = -1;
+
+      // Prefer TW-style 4-6 digit code (optionally followed by single letter, e.g. 3105A)
+      let m = line.match(/(?:^|[\s|│┃【(])(\d{4,6}[A-Z]?)(?=[\s)】|│┃.]|$)/);
+      if (m) {
+        sym = m[1];
+        symMarket = currentMarket === "us" ? "tw" : currentMarket;
+        symPos = line.indexOf(sym);
+      }
+
+      // Otherwise try US-style 2-5 letter ticker
       if (!sym) {
-        m = line.match(/(?:^|[\s|│┃])([A-Z]{1,5})(?=[\s]|$)/);
-        if (m && !/^(BUY|SELL|NEW|USD|TWD|STOCK|LOT|SHARES|QTY|AVG|TOTAL|P\/L)$/i.test(m[1])) sym = m[1];
+        m = line.match(/(?:^|[\s|│┃])([A-Z]{2,5})(?=[\s.]|$)/);
+        if (m && !NOT_A_TICKER.test(m[1])) {
+          sym = m[1];
+          symMarket = "us";
+          symPos = line.indexOf(sym);
+        }
       }
       if (!sym) continue;
 
-      // Gather numeric tokens
-      const nums = (line.match(numRe) || [])
-        .map(s => parseFloat(s.replace(/,/g,"")))
-        .filter(x => isFinite(x));
+      // Everything after the symbol
+      const afterSym = line.slice(symPos + sym.length);
+
+      // Extract numeric tokens
+      const numRe = /[-+]?\d[\d,]*\.?\d*/g;
+      const nums = [];
+      let nm;
+      while ((nm = numRe.exec(afterSym)) !== null) {
+        const raw = nm[0];
+        const v = parseFloat(raw.replace(/,/g, ""));
+        if (!isFinite(v) || v === 0) continue;
+        nums.push({ v, raw, hasDecimal: raw.includes("."), pos: nm.index });
+      }
       if (nums.length < 2) continue;
 
-      // Heuristic: pick a qty (larger integer) and cost (smaller number with decimals)
-      let qty = null, cost = null;
-      // Prefer integer >=1 with no decimal and >= 1 as qty
-      const intCandidates = nums.filter(n => Number.isInteger(n) && n >= 1 && n <= 1e9);
-      const decCandidates = nums.filter(n => !Number.isInteger(n) && n > 0 && n < 1e6);
-      if (intCandidates.length) qty = Math.max(...intCandidates);
-      if (decCandidates.length) cost = decCandidates[0];
-      if (cost == null && nums.length >= 2) cost = nums[1];
+      // Pick qty: first plausible positive integer (no decimal), max 10M shares.
+      // This avoids the bug where market value (big integer at end) was chosen.
+      const MAX_QTY = 10_000_000;
+      let qty = null, qtyIdx = -1;
+      for (let i = 0; i < nums.length; i++) {
+        const n = nums[i];
+        if (!n.hasDecimal && n.v >= 1 && n.v <= MAX_QTY) {
+          qty = n.v; qtyIdx = i; break;
+        }
+      }
       if (qty == null) continue;
 
-      // Name: text between symbol and first number
-      const nameMatch = line.replace(sym, "").split(/[\d]/)[0]
-        .replace(/[|│┃【】()\[\]]/g, " ").trim();
+      // Pick cost: first decimal number after qty; fallback = next number after qty.
+      let cost = null;
+      for (let i = qtyIdx + 1; i < nums.length; i++) {
+        const n = nums[i];
+        if (n.hasDecimal && n.v > 0 && n.v < 1_000_000) { cost = n.v; break; }
+      }
+      if (cost == null && qtyIdx + 1 < nums.length) cost = nums[qtyIdx + 1].v;
+      if (cost == null) {
+        // If we only have one number and it's decimal-ish, treat it as cost with no qty — skip.
+        continue;
+      }
 
-      const k = sym + "|" + qty + "|" + cost;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      out.push({ symbol: sym, name: nameMatch.slice(0, 24), qty, cost: cost ?? 0, rawLine: line });
+      // Sanity: reject rows where qty == cost (often means OCR duplicated a single number)
+      if (qty === cost) continue;
+
+      // Name: text between symbol and first numeric
+      const firstNumPos = nums[0].pos;
+      const namePart = afterSym.slice(0, firstNumPos)
+        .replace(/[|│┃【】()\[\]]/g, " ")
+        .trim();
+
+      out.push({
+        symbol: sym,
+        name: namePart.slice(0, 24),
+        qty,
+        cost,
+        market: symMarket,
+        rawLine,
+      });
     }
     return out;
   }
@@ -781,6 +903,7 @@
     const wrap = $("#candidates");
     wrap.innerHTML = "";
     if (!cands.length) { $("#ocrAddAll").disabled = true; return; }
+
     for (let i = 0; i < cands.length; i++) {
       const c = cands[i];
       const row = document.createElement("div");
@@ -788,15 +911,24 @@
       row.innerHTML = `
         <div class="cb">
           <input type="checkbox" checked id="c${i}"/>
-          <div>
-            <div><b>${c.symbol}</b> <span class="muted">${c.name || ""}</span></div>
+          <div class="cand-body">
+            <div><b>${esc(c.symbol)}</b> <span class="muted">${esc(c.name || "")}</span></div>
             <div class="muted">qty ${c.qty.toLocaleString()} · cost ${c.cost}</div>
+            <select class="cand-mkt" data-i="${i}">
+              <option value="tw" ${c.market === "tw" ? "selected" : ""}>上市 TWSE</option>
+              <option value="twotc" ${c.market === "twotc" ? "selected" : ""}>上櫃 OTC</option>
+              <option value="emerging" ${c.market === "emerging" ? "selected" : ""}>興櫃 Emerging</option>
+              <option value="us" ${c.market === "us" ? "selected" : ""}>US</option>
+            </select>
           </div>
         </div>
         <button class="edit-cand" data-i="${i}">Edit</button>
       `;
+      row.querySelector(".cand-mkt").onchange = (e) => {
+        c.market = e.target.value;
+      };
       row.querySelector(".edit-cand").onclick = () => {
-        const qty = prompt("Quantity", c.qty); if (qty == null) return;
+        const qty = prompt("Quantity (shares)", c.qty); if (qty == null) return;
         const cost = prompt("Avg cost / share", c.cost); if (cost == null) return;
         const sym = prompt("Symbol", c.symbol); if (sym == null) return;
         c.qty = parseFloat(qty); c.cost = parseFloat(cost); c.symbol = sym.trim().toUpperCase();
@@ -804,18 +936,26 @@
       };
       wrap.appendChild(row);
     }
+
     $("#ocrAddAll").disabled = false;
     $("#ocrAddAll").onclick = () => {
-      const market = $("#ocrMarket").value;
       const account = $("#ocrAccount").value.trim();
+      const defaultMkt = $("#ocrMarket").value;
       let added = 0;
       for (let i = 0; i < cands.length; i++) {
         if (!document.getElementById("c"+i)?.checked) continue;
         const c = cands[i];
         if (!c.symbol || !isFinite(c.qty) || !isFinite(c.cost)) continue;
         state.positions.push({
-          id: uid(), symbol: c.symbol.toUpperCase(), market, name: c.name || "",
-          qty: c.qty, cost: c.cost, account, date: "", notes: "from screenshot",
+          id: uid(),
+          symbol: c.symbol.toUpperCase(),
+          market: c.market || defaultMkt,   // per-row market from selector
+          name: c.name || "",
+          qty: c.qty,
+          cost: c.cost,
+          account,
+          date: "",
+          notes: "from screenshot",
         });
         added++;
       }
@@ -827,7 +967,6 @@
   // ---------- Init ----------
   load();
   render();
-  // Initial price fetch if API is configured
   if (state.settings.apiBase) refreshAll();
 })();
 </script>
