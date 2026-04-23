@@ -631,6 +631,9 @@
       if (ccy === disp) return val;
       return disp === "USD" ? (fx ? val / fx : 0) : (fx ? val * fx : 0);
     };
+    // Taiwan trading window filter: 09:00–13:30 TST (UTC+8)
+    const inTwWindow = (t) => { const s = (t + 28800) % 86400; return s >= 32400 && s <= 48600; };
+
     // Split positions: dynamic (have chart data) vs static (no chart data — use current price as flat line)
     const timelines = [];
     let staticVal = 0;
@@ -638,8 +641,23 @@
       const ccy = ccyOf(p.market);
       if (ccy !== disp && !fx) continue;
       const cd = state.charts[`${p.market}:${p.symbol}:${range}`];
+
+      // 1d + US: market is closed during TW hours — hold at yesterday's close as flat offset
+      if (range === "1d" && p.market === "us") {
+        const prevClose = cd?.open ?? state.prices[`${p.market}:${p.symbol}`]?.price;
+        if (prevClose != null) staticVal += toDisp(prevClose * p.qty, ccy);
+        continue;
+      }
+
       if (cd && cd.points.length >= 2) {
-        timelines.push({ points: cd.points, qty: p.qty, ccy, open: cd.open });
+        // 1d + TW/TWOTC/emerging: clip to official trading hours 09:00–13:30 TST
+        const pts = (range === "1d") ? cd.points.filter(pt => inTwWindow(pt.t)) : cd.points;
+        if (pts.length >= 2) {
+          timelines.push({ points: pts, qty: p.qty, ccy, open: cd.open });
+        } else {
+          const pr = state.prices[`${p.market}:${p.symbol}`];
+          if (pr) staticVal += toDisp(pr.price * p.qty, ccy);
+        }
       } else {
         const pr = state.prices[`${p.market}:${p.symbol}`];
         if (pr) staticVal += toDisp(pr.price * p.qty, ccy);
@@ -831,7 +849,22 @@
             <button class="edit">${t("btnEdit")}</button>
             <button class="dup">${t("btnDup")}</button>
           </div>
-          <div class="sparkline-wrap">${(() => { const cd = state.charts[`${p.market}:${p.symbol}:${state.chartRange || "1d"}`]; return cd && cd.points.length >= 2 ? buildSparkline(cd.points, cd.open, 300, 60) : ""; })()}</div>
+          <div class="sparkline-wrap">${(() => {
+            const rng = state.chartRange || "1d";
+            const cd = state.charts[`${p.market}:${p.symbol}:${rng}`];
+            if (!cd) return "";
+            let pts = cd.points;
+            if (rng === "1d") {
+              if (p.market === "us") {
+                // US during TW hours: flat line at yesterday's close
+                pts = cd.open != null ? [{ t: 0, p: cd.open }, { t: 1, p: cd.open }] : [];
+              } else {
+                // TW/TWOTC/emerging: clip to 09:00–13:30 TST
+                pts = pts.filter(pt => { const s = (pt.t + 28800) % 86400; return s >= 32400 && s <= 48600; });
+              }
+            }
+            return pts.length >= 2 ? buildSparkline(pts, cd.open, 300, 60) : "";
+          })()}</div>
         `;
         card.querySelector(".edit").onclick = () => openForm(p);
         card.querySelector(".dup").onclick = () => {
