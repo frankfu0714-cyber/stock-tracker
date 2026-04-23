@@ -9,7 +9,7 @@ const cors = (res) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 };
 
-const MODEL = "gemini-2.0-flash";
+const MODEL = "gemini-2.5-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 const PROMPT = `You are a financial data extractor. Analyze these broker account screenshots and extract all stock holdings.
