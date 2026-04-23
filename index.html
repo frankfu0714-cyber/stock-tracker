@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#0b1020" />
+<title>Stock Tracker</title>
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="apple-touch-icon" href="./icon.png" />
+<style>
+  :root {
+    --bg: #0b1020;
+    --card: #131a36;
+    --card-2: #1a2247;
+    --text: #e8ecf7;
+    --muted: #8a93b2;
+    --accent: #7c9cff;
+    --green: #3ecf8e;
+    --red: #ff6b81;
+    --border: #263055;
+    --chip: #212a55;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f8fc;
+      --card: #ffffff;
+      --card-2: #f0f2fa;
+      --text: #0c1330;
+      --muted: #556089;
+      --accent: #3b5cff;
+      --green: #0f9d58;
+      --red: #d93025;
+      --border: #e3e6f1;
+      --chip: #e9ecf7;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Noto Sans TC", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  header { padding: 16px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  main { padding: 0 12px 120px; max-width: 720px; margin: 0 auto; }
+  .summary { background: linear-gradient(135deg, var(--card), var(--card-2));
+    border: 1px solid var(--border); border-radius: 18px; padding: 18px; margin-bottom: 14px;
+  }
+  .summary .label { font-size: 12px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; }
+  .summary .value { font-size: 30px; font-weight: 700; margin-top: 4px; }
+  .summary .sub { display: flex; gap: 16px; margin-top: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .summary .sub b { color: var(--text); font-weight: 600; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: 0 0 auto; padding: 8px 14px; background: var(--chip); color: var(--text);
+    border-radius: 999px; font-size: 13px; border: 1px solid transparent; cursor: pointer; white-space: nowrap;
+  }
+  .tab.active { background: var(--accent); color: white; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 10px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .row + .row { margin-top: 8px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .holding .top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .holding .sym { font-weight: 700; font-size: 16px; }
+  .holding .name { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .holding .meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  .chip { font-size: 11px; background: var(--chip); color: var(--muted); padding: 3px 8px; border-radius: 6px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin-top: 10px; font-size: 13px; }
+  .grid .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+  .grid .v { font-weight: 600; }
+  .actions { display: flex; gap: 6px; margin-top: 10px; }
+  button, .btn { appearance: none; border: 1px solid var(--border); background: var(--card-2); color: var(--text);
+    padding: 8px 12px; border-radius: 10px; font-size: 13px; cursor: pointer;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: white; font-weight: 600; }
+  button.danger { color: var(--red); }
+  button:active { transform: translateY(1px); }
+  input, select, textarea { width: 100%; padding: 10px 12px; background: var(--card-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px; font-size: 15px; outline: none;
+    font-family: inherit;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  .empty { text-align: center; color: var(--muted); padding: 32px 12px; }
+  .fab { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); right: 20px;
+    background: var(--accent); color: white; width: 56px; height: 56px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 300;
+    box-shadow: 0 8px 24px rgba(60,80,200,.35); border: none; cursor: pointer; z-index: 10;
+  }
+  dialog { background: var(--card); color: var(--text); border: 1px solid var(--border);
+    border-radius: 18px; padding: 0; width: min(92vw, 520px); max-height: 85vh; overflow: auto;
+  }
+  dialog::backdrop { background: rgba(5,8,20,.55); backdrop-filter: blur(3px); }
+  .modal-head { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .modal-body { padding: 14px 16px; }
+  .modal-foot { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; background: var(--card-2); }
+  .drop { border: 2px dashed var(--border); border-radius: 14px; padding: 28px; text-align: center; color: var(--muted); cursor: pointer; }
+  .drop.hover { border-color: var(--accent); color: var(--text); }
+  .ocr-preview { margin-top: 10px; background: var(--card-2); border-radius: 10px; padding: 10px;
+    max-height: 180px; overflow: auto; font-size: 12px; white-space: pre-wrap; color: var(--muted);
+  }
+  .candidate { display: flex; justify-content: space-between; align-items: center; padding: 8px;
+    background: var(--card-2); border-radius: 8px; margin-bottom: 6px; font-size: 13px;
+  }
+  .candidate .cb { display: flex; align-items: center; gap: 8px; }
+  .progress { height: 4px; background: var(--card-2); border-radius: 2px; overflow: hidden; margin: 8px 0; }
+  .progress .bar { height: 100%; background: var(--accent); width: 0%; transition: width .2s ease; }
+  .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+    background: var(--card); border: 1px solid var(--border); padding: 10px 14px; border-radius: 10px;
+    font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+  .acct-group { margin-top: 14px; }
+  .acct-head { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 6px 4px 8px; display: flex; justify-content: space-between;}
+  .sub-pill { font-size: 11px; background: var(--chip); padding: 3px 8px; border-radius: 6px; }
+  @media (max-width: 420px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Stock Tracker</h1>
+  <div>
+    <button id="refreshBtn" title="Refresh prices">↻</button>
+    <button id="settingsBtn" title="Settings">⚙</button>
+  </div>
+</header>
+
+<main>
+  <div class="summary" id="summary">
+    <div class="label">Total Unrealized P/L</div>
+    <div class="value" id="totalPL">—</div>
+    <div class="sub">
+      <div>Cost <b id="totalCost">—</b></div>
+      <div>Market <b id="totalMkt">—</b></div>
+      <div>FX <b id="fxRate">—</b></div>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="all">All</div>
+    <div class="tab" data-tab="tw">上市 TWSE</div>
+    <div class="tab" data-tab="twotc">上櫃 OTC</div>
+    <div class="tab" data-tab="emerging">興櫃 Emerging</div>
+    <div class="tab" data-tab="us">US</div>
+  </div>
+
+  <div id="holdings"></div>
+</main>
+
+<button class="fab" id="addBtn" aria-label="Add position">+</button>
+
+<!-- Add / Edit dialog -->
+<dialog id="formDialog">
+  <div class="modal-head">
+    <strong id="formTitle">Add Position</strong>
+    <button id="closeForm">✕</button>
+  </div>
+  <form id="posForm" class="modal-body">
+    <div class="form-grid">
+      <div>
+        <label>Symbol</label>
+        <input id="fSymbol" placeholder="2330 / AAPL" required autocapitalize="characters"/>
+      </div>
+      <div>
+        <label>Market</label>
+        <select id="fMarket" required>
+          <option value="tw">上市 TWSE</option>
+          <option value="twotc">上櫃 OTC</option>
+          <option value="emerging">興櫃 Emerging</option>
+          <option value="us">US</option>
+        </select>
+      </div>
+      <div class="full">
+        <label>Name (optional)</label>
+        <input id="fName" placeholder="台積電 / Apple Inc."/>
+      </div>
+      <div>
+        <label>Quantity (shares)</label>
+        <input id="fQty" type="number" step="any" min="0" required/>
+      </div>
+      <div>
+        <label>Avg Cost / share</label>
+        <input id="fCost" type="number" step="any" min="0" required/>
+      </div>
+      <div>
+        <label>Account</label>
+        <input id="fAccount" placeholder="元大 / Schwab" list="accountList"/>
+        <datalist id="accountList"></datalist>
+      </div>
+      <div>
+        <label>Purchase date (optional)</label>
+        <input id="fDate" type="date"/>
+      </div>
+      <div class="full">
+        <label>Notes (optional)</label>
+        <input id="fNotes"/>
+      </div>
+    </div>
+  </form>
+  <div class="modal-foot">
+    <button id="deleteBtn" class="danger" style="display:none">Delete</button>
+    <button id="saveBtn" class="primary">Save</button>
+  </div>
+</dialog>
+
+<!-- Screenshot import dialog -->
+<dialog id="ocrDialog">
+  <div class="modal-head">
+    <strong>Upload Broker Screenshot</strong>
+    <button id="closeOcr">✕</button>
+  </div>
+  <div class="modal-body">
+    <label for="shotInput" class="drop" id="drop">
+      Tap or drop a screenshot here.<br>
+      <span class="muted">We run OCR locally on your device — nothing is uploaded.</span>
+    </label>
+    <input id="shotInput" type="file" accept="image/*" style="display:none" />
+    <div>
+      <label style="margin-top:12px">Default market for parsed rows</label>
+      <select id="ocrMarket">
+        <option value="tw">上市 TWSE</option>
+        <option value="twotc">上櫃 OTC</option>
+        <option value="emerging">興櫃 Emerging</option>
+        <option value="us">US</option>
+      </select>
+      <label>Account</label>
+      <input id="ocrAccount" placeholder="元大 / 富邦 / Schwab" list="accountList"/>
+    </div>
+    <div class="progress" id="ocrProgressWrap" style="display:none"><div class="bar" id="ocrProgress"></div></div>
+    <div id="ocrStatus" class="muted" style="margin-top:6px"></div>
+    <div id="candidates"></div>
+    <details style="margin-top:10px"><summary class="muted">Raw OCR text</summary>
+      <div class="ocr-preview" id="ocrText"></div>
+    </details>
+  </div>
+  <div class="modal-foot">
+    <button id="ocrCancel">Cancel</button>
+    <button id="ocrAddAll" class="primary" disabled>Add selected</button>
+  </div>
+</dialog>
+
+<!-- Settings dialog -->
+<dialog id="settingsDialog">
+  <div class="modal-head">
+    <strong>Settings</strong>
+    <button id="closeSettings">✕</button>
+  </div>
+  <div class="modal-body">
+    <label>Price API base URL</label>
+    <input id="apiBase" placeholder="https://your-deploy.vercel.app" />
+    <div class="muted" style="margin-top:6px">Leave blank to disable live prices. Required for 興櫃 prices.</div>
+
+    <label>FX rate (TWD per 1 USD) — override</label>
+    <input id="fxOverride" type="number" step="0.01" placeholder="auto"/>
+
+    <label>Display currency</label>
+    <select id="dispCcy">
+      <option value="TWD">TWD (combine with FX)</option>
+      <option value="USD">USD (combine with FX)</option>
+      <option value="split">Split TWD / USD</option>
+    </select>
+
+    <hr style="border-color:var(--border); margin:14px 0"/>
+    <label>Data export / import</label>
+    <div class="actions">
+      <button id="exportBtn">Export JSON</button>
+      <button id="importBtn">Import JSON</button>
+      <input id="importFile" type="file" accept="application/json" style="display:none"/>
+      <button id="wipeBtn" class="danger">Wipe all data</button>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <button id="saveSettings" class="primary">Save</button>
+  </div>
+</dialog>
+
+<!-- Screenshot / manual FAB menu -->
+<dialog id="addMenu">
+  <div class="modal-body">
+    <button class="primary" id="menuManual" style="width:100%; margin-bottom:8px">✍️  Add manually</button>
+    <button id="menuScreenshot" style="width:100%">📷  Upload screenshot</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<!-- OCR: Tesseract (loaded lazily) -->
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Storage ----------
+  const LS_KEY = "stocktracker.v1";
+  const SETTINGS_KEY = "stocktracker.settings.v1";
+  const DEFAULT_SETTINGS = { apiBase: "", fxOverride: "", dispCcy: "TWD" };
+  const PRICE_CACHE_KEY = "stocktracker.prices.v1";
+  const PRICE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+
+  const state = {
+    positions: [],
+    settings: { ...DEFAULT_SETTINGS },
+    prices: {},          // keyed by `${market}:${symbol}` -> { price, currency, name, ts }
+    fxUsdTwd: null,      // TWD per 1 USD
+    filter: "all",
+  };
+
+  function load() {
+    try { state.positions = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); }
+    catch { state.positions = []; }
+    try { state.settings = { ...DEFAULT_SETTINGS, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")) }; }
+    catch { state.settings = { ...DEFAULT_SETTINGS }; }
+    try {
+      const cached = JSON.parse(localStorage.getItem(PRICE_CACHE_KEY) || "{}");
+      for (const [k, v] of Object.entries(cached)) {
+        if (v && Date.now() - v.ts < PRICE_CACHE_TTL_MS) state.prices[k] = v;
+      }
+    } catch {}
+  }
+  function persist() { localStorage.setItem(LS_KEY, JSON.stringify(state.positions)); }
+  function persistSettings() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings)); }
+  function persistPrices() { localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify(state.prices)); }
+
+  // ---------- Helpers ----------
+  const $ = (sel) => document.querySelector(sel);
+  const uid = () => Math.random().toString(36).slice(2, 10);
+  const fmtCcy = (v, ccy) => {
+    if (!isFinite(v)) return "—";
+    const opts = { minimumFractionDigits: 0, maximumFractionDigits: 2 };
+    return (ccy === "USD" ? "$" : "NT$") + v.toLocaleString(undefined, opts);
+  };
+  const fmtPct = (v) => (isFinite(v) ? (v >= 0 ? "+" : "") + v.toFixed(2) + "%" : "—");
+  const toast = (msg) => {
+    const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 1800);
+  };
+  const marketLabel = { tw: "上市", twotc: "上櫃", emerging: "興櫃", us: "US" };
+  const ccyOf = (m) => (m === "us" ? "USD" : "TWD");
+
+  // ---------- Price fetching ----------
+  async function fetchPrice(symbol, market) {
+    const key = `${market}:${symbol}`;
+    const cached = state.prices[key];
+    if (cached && Date.now() - cached.ts < PRICE_CACHE_TTL_MS) return cached;
+    if (!state.settings.apiBase) return null;
+    try {
+      const url = `${state.settings.apiBase.replace(/\/$/, "")}/api/price?symbol=${encodeURIComponent(symbol)}&market=${market}`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const data = await r.json();
+      if (typeof data.price !== "number") throw new Error(data.error || "no price");
+      const rec = { price: data.price, currency: data.currency || ccyOf(market), name: data.name || "", ts: Date.now() };
+      state.prices[key] = rec; persistPrices();
+      return rec;
+    } catch (e) {
+      console.warn("price fetch failed for", key, e);
+      return null;
+    }
+  }
+  async function fetchFx() {
+    if (state.settings.fxOverride && !isNaN(parseFloat(state.settings.fxOverride))) {
+      state.fxUsdTwd = parseFloat(state.settings.fxOverride);
+      return state.fxUsdTwd;
+    }
+    if (!state.settings.apiBase) return state.fxUsdTwd;
+    try {
+      const url = `${state.settings.apiBase.replace(/\/$/, "")}/api/fx`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const d = await r.json();
+      if (typeof d.rate === "number") { state.fxUsdTwd = d.rate; return d.rate; }
+    } catch (e) { console.warn("fx fetch failed", e); }
+    return state.fxUsdTwd;
+  }
+
+  async function refreshAll() {
+    const btn = $("#refreshBtn");
+    btn.disabled = true; const oldTxt = btn.textContent; btn.textContent = "…";
+    await fetchFx();
+    const uniq = new Map();
+    for (const p of state.positions) uniq.set(`${p.market}:${p.symbol}`, p);
+    const results = await Promise.all([...uniq.values()].map(p => fetchPrice(p.symbol, p.market)));
+    btn.disabled = false; btn.textContent = oldTxt;
+    const miss = results.filter(x => !x).length;
+    if (miss) toast(`${results.length - miss}/${results.length} prices updated`);
+    else toast("Prices updated");
+    render();
+  }
+
+  // ---------- Rendering ----------
+  function posMetrics(p) {
+    const key = `${p.market}:${p.symbol}`;
+    const rec = state.prices[key];
+    const px = rec ? rec.price : null;
+    const ccy = ccyOf(p.market);
+    const cost = (p.qty * p.cost);
+    const mkt = px != null ? (p.qty * px) : null;
+    const pl = mkt != null ? (mkt - cost) : null;
+    const plPct = mkt != null ? ((mkt - cost) / cost * 100) : null;
+    return { px, ccy, cost, mkt, pl, plPct, name: rec?.name || p.name || "" };
+  }
+
+  function toDisplay(value, ccy) {
+    const d = state.settings.dispCcy;
+    if (d === "split") return { value, ccy };
+    const targetCcy = d;
+    const fx = state.fxUsdTwd;
+    if (!fx) return { value, ccy };
+    if (ccy === targetCcy) return { value, ccy: targetCcy };
+    if (ccy === "USD" && targetCcy === "TWD") return { value: value * fx, ccy: "TWD" };
+    if (ccy === "TWD" && targetCcy === "USD") return { value: value / fx, ccy: "USD" };
+    return { value, ccy };
+  }
+
+  function render() {
+    renderSummary();
+    renderHoldings();
+    renderAccountDatalist();
+  }
+
+  function renderSummary() {
+    let costTwd = 0, costUsd = 0, mktTwd = 0, mktUsd = 0, anyMissing = false;
+    for (const p of state.positions) {
+      const m = posMetrics(p);
+      if (m.ccy === "TWD") { costTwd += m.cost; if (m.mkt != null) mktTwd += m.mkt; else anyMissing = true; }
+      else { costUsd += m.cost; if (m.mkt != null) mktUsd += m.mkt; else anyMissing = true; }
+    }
+    const fx = state.fxUsdTwd;
+    const disp = state.settings.dispCcy;
+    let costStr = "", mktStr = "", plStr = "—", plClass = "";
+    if (disp === "split") {
+      costStr = `${fmtCcy(costTwd, "TWD")} / ${fmtCcy(costUsd, "USD")}`;
+      mktStr = `${fmtCcy(mktTwd, "TWD")} / ${fmtCcy(mktUsd, "USD")}`;
+      const plT = mktTwd - costTwd, plU = mktUsd - costUsd;
+      plStr = `${(plT >= 0 ? "+" : "") + fmtCcy(plT, "TWD")} / ${(plU >= 0 ? "+" : "") + fmtCcy(plU, "USD")}`;
+      plClass = (plT + plU) >= 0 ? "pos" : "neg";
+    } else if (fx || (costUsd === 0 && mktUsd === 0) || (costTwd === 0 && mktTwd === 0)) {
+      const toTwd = (v, ccy) => ccy === "TWD" ? v : v * (fx || 0);
+      const toUsd = (v, ccy) => ccy === "USD" ? v : (fx ? v / fx : 0);
+      const convert = disp === "TWD" ? toTwd : toUsd;
+      const totalCost = convert(costTwd, "TWD") + convert(costUsd, "USD");
+      const totalMkt = convert(mktTwd, "TWD") + convert(mktUsd, "USD");
+      const pl = totalMkt - totalCost;
+      costStr = fmtCcy(totalCost, disp);
+      mktStr = fmtCcy(totalMkt, disp);
+      plStr = (pl >= 0 ? "+" : "") + fmtCcy(pl, disp) + "  (" + fmtPct(totalCost ? pl / totalCost * 100 : NaN) + ")";
+      plClass = pl >= 0 ? "pos" : "neg";
+    } else {
+      costStr = fmtCcy(costTwd, "TWD") + " / " + fmtCcy(costUsd, "USD");
+      mktStr = "set API + FX →";
+    }
+    $("#totalCost").textContent = costStr;
+    $("#totalMkt").textContent = mktStr + (anyMissing ? " *" : "");
+    $("#totalPL").textContent = plStr;
+    $("#totalPL").className = "value " + plClass;
+    $("#fxRate").textContent = fx ? fx.toFixed(3) : "—";
+  }
+
+  function renderHoldings() {
+    const container = $("#holdings");
+    container.innerHTML = "";
+    let list = state.positions.slice();
+    if (state.filter !== "all") list = list.filter(p => p.market === state.filter);
+
+    if (!list.length) {
+      container.innerHTML = `<div class="empty">
+        No positions yet.<br>Tap <b>+</b> to add one, or upload a broker screenshot.
+      </div>`;
+      return;
+    }
+
+    // Sort by absolute P/L desc if available, else by cost desc
+    list.sort((a, b) => {
+      const ma = posMetrics(a), mb = posMetrics(b);
+      const va = ma.pl != null ? Math.abs(ma.pl) : ma.cost;
+      const vb = mb.pl != null ? Math.abs(mb.pl) : mb.cost;
+      return vb - va;
+    });
+
+    // Group by account
+    const byAcct = {};
+    for (const p of list) { (byAcct[p.account || "—"] ||= []).push(p); }
+    const accts = Object.keys(byAcct).sort();
+
+    for (const acct of accts) {
+      const grp = document.createElement("div");
+      grp.className = "acct-group";
+      const items = byAcct[acct];
+      let acctCost = 0, acctMkt = 0, acctCcy = null, mixed = false;
+      for (const p of items) {
+        const m = posMetrics(p);
+        if (acctCcy == null) acctCcy = m.ccy;
+        else if (acctCcy !== m.ccy) mixed = true;
+        acctCost += m.cost;
+        if (m.mkt != null) acctMkt += m.mkt;
+      }
+      const acctPL = (acctMkt && acctCost) ? (acctMkt - acctCost) : null;
+      const head = document.createElement("div");
+      head.className = "acct-head";
+      const plText = acctPL != null
+        ? `${(acctPL >= 0 ? "+" : "") + fmtCcy(acctPL, mixed ? "TWD" : acctCcy)}  (${fmtPct(acctCost ? acctPL/acctCost*100 : NaN)})`
+        : "—";
+      head.innerHTML = `<span>${acct}</span><span class="sub-pill ${acctPL >= 0 ? "pos" : "neg"}">${plText}</span>`;
+      grp.appendChild(head);
+
+      for (const p of items) {
+        const m = posMetrics(p);
+        const card = document.createElement("div");
+        card.className = "card holding";
+        card.innerHTML = `
+          <div class="top">
+            <div>
+              <div class="sym">${p.symbol}</div>
+              <div class="name">${(m.name || "").replace(/</g,"&lt;")}</div>
+              <div class="meta">
+                <span class="chip">${marketLabel[p.market]}</span>
+                <span class="chip">${p.qty.toLocaleString()} sh</span>
+                ${p.date ? `<span class="chip">${p.date}</span>` : ""}
+              </div>
+            </div>
+            <div style="text-align:right">
+              <div class="${m.pl >= 0 ? "pos" : "neg"}" style="font-weight:700; font-size:15px">
+                ${m.pl != null ? (m.pl >= 0 ? "+" : "") + fmtCcy(m.pl, m.ccy) : "—"}
+              </div>
+              <div class="muted" style="font-size:12px">${fmtPct(m.plPct)}</div>
+            </div>
+          </div>
+          <div class="grid">
+            <div><div class="k">Avg cost</div><div class="v">${fmtCcy(p.cost, m.ccy)}</div></div>
+            <div><div class="k">Current</div><div class="v">${m.px != null ? fmtCcy(m.px, m.ccy) : "—"}</div></div>
+            <div><div class="k">Cost basis</div><div class="v">${fmtCcy(m.cost, m.ccy)}</div></div>
+            <div><div class="k">Market value</div><div class="v">${m.mkt != null ? fmtCcy(m.mkt, m.ccy) : "—"}</div></div>
+          </div>
+          <div class="actions">
+            <button class="edit">Edit</button>
+            <button class="dup">Duplicate</button>
+          </div>
+        `;
+        card.querySelector(".edit").onclick = () => openForm(p);
+        card.querySelector(".dup").onclick = () => {
+          state.positions.push({ ...p, id: uid() }); persist(); render();
+        };
+        grp.appendChild(card);
+      }
+      container.appendChild(grp);
+    }
+  }
+
+  function renderAccountDatalist() {
+    const set = new Set(state.positions.map(p => p.account).filter(Boolean));
+    const dl = $("#accountList");
+    dl.innerHTML = "";
+    for (const a of set) { const o = document.createElement("option"); o.value = a; dl.appendChild(o); }
+  }
+
+  // ---------- Form ----------
+  let editingId = null;
+  function openForm(p) {
+    editingId = p?.id || null;
+    $("#formTitle").textContent = p ? "Edit Position" : "Add Position";
+    $("#fSymbol").value = p?.symbol || "";
+    $("#fMarket").value = p?.market || "tw";
+    $("#fName").value = p?.name || "";
+    $("#fQty").value = p?.qty ?? "";
+    $("#fCost").value = p?.cost ?? "";
+    $("#fAccount").value = p?.account || "";
+    $("#fDate").value = p?.date || "";
+    $("#fNotes").value = p?.notes || "";
+    $("#deleteBtn").style.display = p ? "" : "none";
+    $("#formDialog").showModal();
+  }
+  $("#closeForm").onclick = () => $("#formDialog").close();
+  $("#saveBtn").onclick = (e) => {
+    e.preventDefault();
+    const rec = {
+      id: editingId || uid(),
+      symbol: $("#fSymbol").value.trim().toUpperCase(),
+      market: $("#fMarket").value,
+      name: $("#fName").value.trim(),
+      qty: parseFloat($("#fQty").value),
+      cost: parseFloat($("#fCost").value),
+      account: $("#fAccount").value.trim(),
+      date: $("#fDate").value || "",
+      notes: $("#fNotes").value.trim(),
+    };
+    if (!rec.symbol || !isFinite(rec.qty) || !isFinite(rec.cost)) { toast("Please fill required fields"); return; }
+    if (editingId) {
+      const i = state.positions.findIndex(p => p.id === editingId);
+      if (i >= 0) state.positions[i] = rec;
+    } else {
+      state.positions.push(rec);
+    }
+    persist();
+    $("#formDialog").close();
+    fetchPrice(rec.symbol, rec.market).then(render);
+    render();
+  };
+  $("#deleteBtn").onclick = (e) => {
+    e.preventDefault();
+    if (!editingId) return;
+    if (!confirm("Delete this position?")) return;
+    state.positions = state.positions.filter(p => p.id !== editingId);
+    persist(); $("#formDialog").close(); render();
+  };
+
+  // ---------- FAB menu ----------
+  $("#addBtn").onclick = () => $("#addMenu").showModal();
+  $("#menuManual").onclick = () => { $("#addMenu").close(); openForm(null); };
+  $("#menuScreenshot").onclick = () => { $("#addMenu").close(); openOcr(); };
+  $("#addMenu").addEventListener("click", (e) => { if (e.target.id === "addMenu") $("#addMenu").close(); });
+
+  // ---------- Tabs ----------
+  $("#tabs").addEventListener("click", (e) => {
+    const tab = e.target.closest(".tab"); if (!tab) return;
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    state.filter = tab.dataset.tab;
+    renderHoldings();
+  });
+
+  $("#refreshBtn").onclick = refreshAll;
+
+  // ---------- Settings ----------
+  $("#settingsBtn").onclick = () => {
+    $("#apiBase").value = state.settings.apiBase || "";
+    $("#fxOverride").value = state.settings.fxOverride || "";
+    $("#dispCcy").value = state.settings.dispCcy || "TWD";
+    $("#settingsDialog").showModal();
+  };
+  $("#closeSettings").onclick = () => $("#settingsDialog").close();
+  $("#saveSettings").onclick = (e) => {
+    e.preventDefault();
+    state.settings.apiBase = $("#apiBase").value.trim();
+    state.settings.fxOverride = $("#fxOverride").value.trim();
+    state.settings.dispCcy = $("#dispCcy").value;
+    persistSettings();
+    $("#settingsDialog").close();
+    refreshAll();
+  };
+  $("#exportBtn").onclick = (e) => {
+    e.preventDefault();
+    const blob = new Blob([JSON.stringify({ positions: state.positions, settings: state.settings }, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "stock-tracker-backup.json"; a.click();
+  };
+  $("#importBtn").onclick = (e) => { e.preventDefault(); $("#importFile").click(); };
+  $("#importFile").onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const obj = JSON.parse(await f.text());
+      if (Array.isArray(obj.positions)) state.positions = obj.positions;
+      if (obj.settings) state.settings = { ...DEFAULT_SETTINGS, ...obj.settings };
+      persist(); persistSettings(); render(); toast("Imported");
+    } catch { toast("Bad JSON"); }
+  };
+  $("#wipeBtn").onclick = (e) => {
+    e.preventDefault();
+    if (!confirm("Wipe all positions and settings? This cannot be undone.")) return;
+    localStorage.removeItem(LS_KEY); localStorage.removeItem(PRICE_CACHE_KEY);
+    state.positions = []; state.prices = {}; render(); toast("Wiped");
+  };
+
+  // ---------- OCR ----------
+  let tesseractReady = null;
+  function loadTesseract() {
+    if (tesseractReady) return tesseractReady;
+    tesseractReady = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js";
+      s.onload = () => resolve(window.Tesseract);
+      s.onerror = () => reject(new Error("Failed to load Tesseract.js — need internet"));
+      document.head.appendChild(s);
+    });
+    return tesseractReady;
+  }
+
+  function openOcr() {
+    $("#shotInput").value = "";
+    $("#ocrStatus").textContent = "";
+    $("#ocrText").textContent = "";
+    $("#candidates").innerHTML = "";
+    $("#ocrAddAll").disabled = true;
+    $("#ocrDialog").showModal();
+  }
+  $("#closeOcr").onclick = () => $("#ocrDialog").close();
+  $("#ocrCancel").onclick = () => $("#ocrDialog").close();
+
+  const drop = $("#drop");
+  drop.addEventListener("click", () => $("#shotInput").click());
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("hover"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("hover"));
+  drop.addEventListener("drop", (e) => {
+    e.preventDefault(); drop.classList.remove("hover");
+    if (e.dataTransfer.files?.[0]) handleShot(e.dataTransfer.files[0]);
+  });
+  $("#shotInput").addEventListener("change", (e) => {
+    if (e.target.files?.[0]) handleShot(e.target.files[0]);
+  });
+
+  async function handleShot(file) {
+    $("#ocrStatus").textContent = "Loading OCR engine…";
+    $("#ocrProgressWrap").style.display = "";
+    const setP = (p) => $("#ocrProgress").style.width = (p*100).toFixed(0) + "%";
+    let T;
+    try { T = await loadTesseract(); }
+    catch (e) { $("#ocrStatus").textContent = e.message; return; }
+    $("#ocrStatus").textContent = "Recognizing…";
+    try {
+      const res = await T.recognize(file, "chi_tra+eng", { logger: m => {
+        if (m.status === "recognizing text") setP(m.progress);
+      }});
+      const text = res.data.text || "";
+      $("#ocrText").textContent = text;
+      const cands = parseCandidates(text);
+      renderCandidates(cands);
+      $("#ocrStatus").textContent = `Found ${cands.length} possible rows. Review and select.`;
+    } catch (e) {
+      $("#ocrStatus").textContent = "OCR failed: " + e.message;
+    }
+  }
+
+  // Heuristic parser: looks for stock-like rows.
+  // TW tickers: 4-digit numeric (e.g. 2330). Also 6-digit for 興櫃 sometimes.
+  // US tickers: 1-5 uppercase letters.
+  // Quantity typically integer 100+; cost often has decimals.
+  function parseCandidates(text) {
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const out = [];
+    const seen = new Set();
+    const numRe = /[-+]?[\d,]*\.?\d+/g;
+    for (const line of lines) {
+      let sym = null;
+      // TW-style 4-6 digit code (allow suffix letter)
+      let m = line.match(/(?:^|[\s|│┃]|【|\()(\d{4,6}[A-Z]?)(?=[\s)】|│┃]|$)/);
+      if (m) sym = m[1];
+      // US ticker: standalone 1-5 letters, likely surrounded by whitespace/punct
+      if (!sym) {
+        m = line.match(/(?:^|[\s|│┃])([A-Z]{1,5})(?=[\s]|$)/);
+        if (m && !/^(BUY|SELL|NEW|USD|TWD|STOCK|LOT|SHARES|QTY|AVG|TOTAL|P\/L)$/i.test(m[1])) sym = m[1];
+      }
+      if (!sym) continue;
+
+      // Gather numeric tokens
+      const nums = (line.match(numRe) || [])
+        .map(s => parseFloat(s.replace(/,/g,"")))
+        .filter(x => isFinite(x));
+      if (nums.length < 2) continue;
+
+      // Heuristic: pick a qty (larger integer) and cost (smaller number with decimals)
+      let qty = null, cost = null;
+      // Prefer integer >=1 with no decimal and >= 1 as qty
+      const intCandidates = nums.filter(n => Number.isInteger(n) && n >= 1 && n <= 1e9);
+      const decCandidates = nums.filter(n => !Number.isInteger(n) && n > 0 && n < 1e6);
+      if (intCandidates.length) qty = Math.max(...intCandidates);
+      if (decCandidates.length) cost = decCandidates[0];
+      if (cost == null && nums.length >= 2) cost = nums[1];
+      if (qty == null) continue;
+
+      // Name: text between symbol and first number
+      const nameMatch = line.replace(sym, "").split(/[\d]/)[0]
+        .replace(/[|│┃【】()\[\]]/g, " ").trim();
+
+      const k = sym + "|" + qty + "|" + cost;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ symbol: sym, name: nameMatch.slice(0, 24), qty, cost: cost ?? 0, rawLine: line });
+    }
+    return out;
+  }
+
+  function renderCandidates(cands) {
+    const wrap = $("#candidates");
+    wrap.innerHTML = "";
+    if (!cands.length) { $("#ocrAddAll").disabled = true; return; }
+    for (let i = 0; i < cands.length; i++) {
+      const c = cands[i];
+      const row = document.createElement("div");
+      row.className = "candidate";
+      row.innerHTML = `
+        <div class="cb">
+          <input type="checkbox" checked id="c${i}"/>
+          <div>
+            <div><b>${c.symbol}</b> <span class="muted">${c.name || ""}</span></div>
+            <div class="muted">qty ${c.qty.toLocaleString()} · cost ${c.cost}</div>
+          </div>
+        </div>
+        <button class="edit-cand" data-i="${i}">Edit</button>
+      `;
+      row.querySelector(".edit-cand").onclick = () => {
+        const qty = prompt("Quantity", c.qty); if (qty == null) return;
+        const cost = prompt("Avg cost / share", c.cost); if (cost == null) return;
+        const sym = prompt("Symbol", c.symbol); if (sym == null) return;
+        c.qty = parseFloat(qty); c.cost = parseFloat(cost); c.symbol = sym.trim().toUpperCase();
+        renderCandidates(cands);
+      };
+      wrap.appendChild(row);
+    }
+    $("#ocrAddAll").disabled = false;
+    $("#ocrAddAll").onclick = () => {
+      const market = $("#ocrMarket").value;
+      const account = $("#ocrAccount").value.trim();
+      let added = 0;
+      for (let i = 0; i < cands.length; i++) {
+        if (!document.getElementById("c"+i)?.checked) continue;
+        const c = cands[i];
+        if (!c.symbol || !isFinite(c.qty) || !isFinite(c.cost)) continue;
+        state.positions.push({
+          id: uid(), symbol: c.symbol.toUpperCase(), market, name: c.name || "",
+          qty: c.qty, cost: c.cost, account, date: "", notes: "from screenshot",
+        });
+        added++;
+      }
+      persist(); $("#ocrDialog").close(); render(); refreshAll();
+      toast(`Added ${added} position${added === 1 ? "" : "s"}`);
+    };
+  }
+
+  // ---------- Init ----------
+  load();
+  render();
+  // Initial price fetch if API is configured
+  if (state.settings.apiBase) refreshAll();
+})();
+</script>
+</body>
+</html>

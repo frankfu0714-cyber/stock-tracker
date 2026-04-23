@@ -1,0 +1,13 @@
+{
+  "name": "stock-tracker",
+  "version": "0.1.0",
+  "description": "Personal stock portfolio tracker for TW (上市/上櫃/興櫃) and US stocks.",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
