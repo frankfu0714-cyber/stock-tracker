@@ -582,12 +582,16 @@
       if (!r.ok) throw new Error("HTTP " + r.status);
       const data = await r.json();
       if (data.error) throw new Error(data.error);
-      const rec = { points: data.points || [], open: data.open ?? null, currency: data.currency || ccyOf(market), ts: Date.now() };
+      const pts = data.points || [];
+      // Cache empty results briefly (60s) so transient failures don't lock out real data
+      const recTs = pts.length === 0 ? Date.now() - ttl + 60_000 : Date.now();
+      const rec = { points: pts, open: data.open ?? null, currency: data.currency || ccyOf(market), ts: recTs };
       state.charts[key] = rec;
       return rec;
     } catch (e) {
       console.warn("chart fetch failed", key, e);
-      state.charts[key] = { points: [], open: null, currency: ccyOf(market), ts: Date.now() };
+      // Cache errors with 60s TTL so a retry happens soon
+      state.charts[key] = { points: [], open: null, currency: ccyOf(market), ts: Date.now() - ttl + 60_000 };
       return state.charts[key];
     }
   }
@@ -690,6 +694,7 @@
     const miss = results.filter(x => !x).length;
     toast(t("toastPrices")(results.length - miss, results.length));
     render();
+    state.charts = {}; // clear chart cache so ↻ always fetches fresh data
     fetchAllCharts([...uniq.values()]); // non-blocking; re-renders when chart data arrives
   }
 
