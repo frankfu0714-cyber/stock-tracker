@@ -345,7 +345,7 @@
     const opts = { minimumFractionDigits: 0, maximumFractionDigits: 2 };
     return (ccy === "USD" ? "$" : "NT$") + v.toLocaleString(undefined, opts);
   };
-  const fmtPct = (v) => (isFinite(v) ? (v >= 0 ? "+" : "") + v.toFixed(2) + "%" : "—");
+  const fmtPct = (v) => (v != null && isFinite(v) ? (v >= 0 ? "+" : "") + v.toFixed(2) + "%" : "—");
   const toast = (msg) => {
     const t = $("#toast"); t.textContent = msg; t.classList.add("show");
     clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 1800);
