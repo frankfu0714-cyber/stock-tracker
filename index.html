@@ -105,13 +105,16 @@
   .ocr-preview { margin-top: 10px; background: var(--card-2); border-radius: 10px; padding: 10px;
     max-height: 180px; overflow: auto; font-size: 12px; white-space: pre-wrap; color: var(--muted);
   }
-  .candidate { display: flex; justify-content: space-between; align-items: flex-start; padding: 8px;
-    background: var(--card-2); border-radius: 8px; margin-bottom: 6px; font-size: 13px; gap: 8px;
+  .candidate { display: flex; align-items: flex-start; gap: 8px; padding: 8px;
+    background: var(--card-2); border-radius: 8px; margin-bottom: 6px; font-size: 13px;
   }
-  .candidate .cb { display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0; }
-  .candidate .cand-body { min-width: 0; flex: 1; }
-  .candidate .cand-mkt { width: 100%; padding: 3px 6px; font-size: 11px; margin-top: 4px; }
-  .candidate .edit-cand { flex-shrink: 0; font-size: 11px; padding: 4px 10px; white-space: nowrap; }
+  .candidate > input[type=checkbox] { margin-top: 2px; flex-shrink: 0; }
+  .cand-main { flex: 1; min-width: 0; }
+  .cand-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cand-row2 { display: flex; align-items: center; gap: 5px; margin-top: 3px; font-size: 12px; color: var(--muted); }
+  .cand-mkt { font-size: 11px; padding: 1px 4px; flex-shrink: 0; }
+  .cand-cost { margin-top: 2px; font-size: 12px; color: var(--muted); }
+  .edit-cand { flex-shrink: 0; font-size: 11px; padding: 4px 10px; white-space: nowrap; align-self: flex-start; }
   .progress { height: 4px; background: var(--card-2); border-radius: 2px; overflow: hidden; margin: 8px 0; }
   .progress .bar { height: 100%; background: var(--accent); width: 0%; transition: width .2s ease; }
   .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
@@ -784,18 +787,19 @@
       const row = document.createElement("div");
       row.className = "candidate";
       row.innerHTML = `
-        <div class="cb">
-          <input type="checkbox" checked id="c${i}"/>
-          <div class="cand-body">
-            <div><b>${esc(c.symbol)}</b> <span class="muted">${esc(c.name || "")}</span></div>
-            <div class="muted">qty ${c.qty.toLocaleString()} · cost ${c.cost}</div>
+        <input type="checkbox" checked id="c${i}"/>
+        <div class="cand-main">
+          <div class="cand-title">${c.name ? `${esc(c.name)} (${esc(c.symbol)})` : esc(c.symbol)}</div>
+          <div class="cand-row2">
             <select class="cand-mkt" data-i="${i}">
               <option value="tw" ${c.market === "tw" ? "selected" : ""}>上市 TWSE</option>
               <option value="twotc" ${c.market === "twotc" ? "selected" : ""}>上櫃 OTC</option>
               <option value="emerging" ${c.market === "emerging" ? "selected" : ""}>興櫃 Emerging</option>
               <option value="us" ${c.market === "us" ? "selected" : ""}>US</option>
             </select>
+            <span>· ${c.qty.toLocaleString()} sh</span>
           </div>
+          <div class="cand-cost">Cost: ${fmtCcy(c.cost, ccyOf(c.market))}</div>
         </div>
         <button class="edit-cand" data-i="${i}">Edit</button>
       `;
