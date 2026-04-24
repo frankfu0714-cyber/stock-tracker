@@ -517,20 +517,21 @@
   function buildSparkline(points, open, W, H) {
     if (!points || points.length < 2) return "";
     const prices = points.map(p => p.p);
-    const times  = points.map(p => p.t);
-    const minT = times[0], maxT = times[times.length - 1];
-    const tRange = maxT - minT || 1;
     const ref = open != null ? open : prices[0];
     const allP = [...prices, ref];
     const rawMin = Math.min(...allP), rawMax = Math.max(...allP);
     const pad = Math.max((rawMax - rawMin) * 0.1, rawMin * 0.005, 1);
     const minP = rawMin - pad, maxP = rawMax + pad, pRange = maxP - minP;
-    const xOf = t => ((t - minT) / tRange * W).toFixed(2);
+    // Use index-based x so all data points are evenly spaced horizontally.
+    // Time-proportional x creates large dead zones for overnight/weekend gaps
+    // (e.g. a holiday gap fills 57% of the chart width for a 5-day range).
+    const n = points.length;
+    const xOf = i => (n <= 1 ? 0 : i / (n - 1) * W).toFixed(2);
     const yOf = p => (H - (p - minP) / pRange * H).toFixed(2);
     const last = prices[prices.length - 1];
     const color = `var(${last >= ref ? "--green" : "--red"})`;
-    const pts = points.map(p => `${xOf(p.t)},${yOf(p.p)}`).join(" ");
-    const f = xOf(times[0]), l = xOf(times[times.length - 1]);
+    const pts = points.map((p, i) => `${xOf(i)},${yOf(p.p)}`).join(" ");
+    const f = xOf(0), l = xOf(n - 1);
     const ry = yOf(ref);
     return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="display:block;width:100%;height:${H}px"><line x1="0" y1="${ry}" x2="${W}" y2="${ry}" style="stroke:${color};stroke-width:.5;stroke-dasharray:2,2;opacity:.35"/><polygon points="${f},${H} ${pts} ${l},${H}" style="fill:${color};opacity:.12"/><polyline points="${pts}" style="fill:none;stroke:${color};stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round"/></svg>`;
   }
@@ -673,13 +674,12 @@
     // For US-only portfolios fall back to all timestamps.
     const twdTls = timelines.filter(tl => tl.isTwd);
     const masterTls = twdTls.length > 0 ? twdTls : timelines;
-    // 5d: use only the last timestamp of each TST trading day (daily close).
-    // Intraday 15m bars at weekly scale cause visible noise from single-day swings
-    // (e.g., a stock that opens high, dips mid-session, then recovers looks like a
-    // sharp end-of-chart dip). Daily closes show the correct week-over-week trend.
-    // Other ranges: use all TW-market timestamps for full intraday detail.
+    // 5d/1mo: use only the last timestamp of each TST trading day (daily close).
+    // This matches the 1y approach — one data point per trading day, showing the
+    // day-over-day trend without intraday noise or overnight/weekend dead zones.
+    // Today (1d): keep full 5m intraday detail for the trading session.
     let timestamps;
-    if (range === "5d") {
+    if (range === "5d" || range === "1mo") {
       const dayMap = {};
       for (const tl of masterTls) for (const pt of tl.points) {
         const day = Math.floor((pt.t + 28800) / 86400);

@@ -9,7 +9,7 @@ const cors = (res) => {
 };
 
 // interval is fixed per range to avoid Yahoo rejection
-const RANGE_INTERVAL = { "1d": "5m", "5d": "15m", "1mo": "1h", "1y": "1d" };
+const RANGE_INTERVAL = { "1d": "5m", "5d": "1d", "1mo": "1d", "1y": "1d" };
 
 async function yahooChart(ySym, range, interval) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySym)}?range=${range}&interval=${interval}`;
